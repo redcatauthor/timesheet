@@ -1379,6 +1379,15 @@ function doExport(type) {
   const to = document.getElementById('exp-to').value;
   const filename = `timesheet_${from}_${to}`;
 
+  if (type === 'html') {
+    const html = buildExportHTML(rows, from, to, document.getElementById('exp-proj').value);
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    closeModal('export-modal');
+    return;
+  }
+
   if (type === 'csv') {
     const lines = [
       ['Date','Project','Task Type','Hours','Notes'].join(','),
@@ -1400,13 +1409,7 @@ function doExport(type) {
     XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
     XLSX.writeFile(wb, filename + '.xlsx');
   }
-  if (type === 'html') {
-    const html = buildExportHTML(rows, from, to, document.getElementById('exp-proj').value);
-    const win = window.open('', '_blank');
-    win.document.write(html);
-    win.document.close();
-    return;
-  }
+
   closeModal('export-modal');
   notify('Export complete', 'success');
 }
