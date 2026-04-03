@@ -528,6 +528,7 @@
       </span>
       <button class="header-btn" onclick="openExport()">Export</button>
       <button class="header-btn" onclick="openSettings()">Settings</button>
+      <button class="header-btn" onclick="openFromTasks()">From tasks</button>
       <button class="header-btn primary" onclick="openAdd()">+ Log time</button>
     </div>
   </header>
@@ -638,6 +639,19 @@
   </div>
 </div>
 
+
+<!-- From tasks modal -->
+<div class="modal-overlay" id="tasks-modal">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-title">Import from tasks</div>
+    <p style="font-size:12px;color:var(--ink3);margin-bottom:1rem;">Select a completed task to import into your timesheet. Only tasks with a start and end time are shown.</p>
+    <div id="tasks-list" style="max-height:340px;overflow-y:auto;border:1px solid var(--paper3);border-radius:var(--radius);"></div>
+    <div class="modal-actions">
+      <button class="modal-btn" onclick="closeModal('tasks-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Export modal -->
 <div class="modal-overlay" id="export-modal">
   <div class="modal">
@@ -659,7 +673,8 @@
     <div class="export-options">
       <button class="modal-btn" onclick="closeModal('export-modal')">Cancel</button>
       <button class="modal-btn" onclick="doExport('csv')">Export CSV</button>
-      <button class="modal-btn primary" onclick="doExport('xlsx')">Export XLSX</button>
+      <button class="modal-btn" onclick="doExport('xlsx')">Export XLSX</button>
+      <button class="modal-btn primary" onclick="doExport('html')">Export PDF / HTML</button>
     </div>
   </div>
 </div>
@@ -1007,6 +1022,356 @@ function getExportRows() {
   }).sort((a,b) => a.date.localeCompare(b.date));
 }
 
+
+function buildExportHTML(rows, from, to, projFilter) {
+  const totalHours = rows.reduce((a,e) => a+e.hours, 0);
+  const byProject = {};
+  rows.forEach(e => { byProject[e.project] = (byProject[e.project]||0) + e.hours; });
+  const projSummary = Object.entries(byProject).sort((a,b)=>b[1]-a[1]);
+
+  const fmtDateLong = s => {
+    if (!s) return '';
+    const [y,m,d] = s.split('-');
+    return new Date(y,m-1,d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  };
+
+  const TASK_COLORS_HEX = {
+    Development:'#1a4a7a', Design:'#4a2a7a', Meetings:'#7a5a10',
+    Research:'#1a5a3a', Admin:'#4a4a4a', Review:'#3a5a10',
+    Testing:'#1a4a7a', Writing:'#4a2a7a', Other:'#4a4a4a'
+  };
+  const TASK_BG_HEX = {
+    Development:'#e6f0f8', Design:'#f0ebf8', Meetings:'#f5edda',
+    Research:'#e8f4ee', Admin:'#f0f0f0', Review:'#f0f5e8',
+    Testing:'#e6f0f8', Writing:'#f0ebf8', Other:'#f0f0f0'
+  };
+
+  const rows_html = rows.map(e => `
+    <tr>
+      <td class="td-date">${fmtDate(e.date)}</td>
+      <td class="td-project">${esc(e.project)||'—'}</td>
+      <td><span class="tag" style="background:${TASK_BG_HEX[e.tasktype]||'#f0f0f0'};color:${TASK_COLORS_HEX[e.tasktype]||'#444'}">${e.tasktype}</span></td>
+      <td class="td-hours">${fmtHours(e.hours)}</td>
+      <td class="td-notes">${esc(e.notes||'')}</td>
+    </tr>`).join('');
+
+  const proj_rows = projSummary.map(([p,h]) => `
+    <tr>
+      <td>${esc(p)}</td>
+      <td style="text-align:right;font-weight:500;">${fmtHours(h)}</td>
+      <td style="text-align:right;color:#888;font-size:11px;">${Math.round(h/totalHours*100)}%</td>
+    </tr>`).join('');
+
+  const periodLabel = from && to
+    ? `${fmtDateLong(from)} — ${fmtDateLong(to)}`
+    : from ? `From ${fmtDateLong(from)}` : to ? `To ${fmtDateLong(to)}` : 'All time';
+
+  const projLabel = projFilter || 'All projects';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Timesheet — ${periodLabel}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1814;
+    --ink2: #3d3a35;
+    --ink3: #7a756d;
+    --ink4: #b0ab9f;
+    --paper: #faf8f5;
+    --paper2: #f0ede8;
+    --paper3: #e3ddd4;
+    --accent: #c4602a;
+  }
+
+  @page {
+    margin: 20mm 18mm;
+    size: A4;
+  }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 3rem 4rem;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .print-btn {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 10px 22px;
+    border-radius: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 8px rgba(26,24,20,0.2);
+    transition: background 0.15s;
+  }
+  .print-btn:hover { background: #3d3a35; }
+
+  @media print {
+    .print-btn { display: none; }
+    body { padding: 0; background: white; }
+  }
+
+  /* Header */
+  .doc-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .doc-logo {
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    font-weight: 300;
+    color: var(--ink);
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+
+  .doc-logo span { color: var(--accent); }
+
+  .doc-meta {
+    text-align: right;
+  }
+
+  .doc-period {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    margin-bottom: 3px;
+  }
+
+  .doc-sub {
+    font-size: 11px;
+    color: var(--ink3);
+  }
+
+  /* Summary cards */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 2.5rem;
+  }
+
+  .summary-card {
+    background: var(--paper2);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--paper3);
+  }
+
+  .summary-card.accent {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  .sc-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--ink3);
+    margin-bottom: 6px;
+  }
+
+  .summary-card.accent .sc-label { color: rgba(245,242,237,0.5); }
+
+  .sc-val {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 300;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+
+  .summary-card.accent .sc-val { color: #faf8f5; }
+
+  /* Section headings */
+  .section-head {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink3);
+    font-weight: 500;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--paper3);
+  }
+
+  /* Project summary table */
+  .proj-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 2.5rem;
+  }
+
+  .proj-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--paper3);
+    font-size: 12px;
+  }
+
+  .proj-table tr:last-child td { border-bottom: none; }
+
+  /* Main entries table */
+  .entries-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 2rem;
+    page-break-inside: auto;
+  }
+
+  .entries-table thead th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--ink3);
+    font-weight: 500;
+    padding: 8px 10px;
+    text-align: left;
+    background: var(--paper2);
+    border-bottom: 1px solid var(--paper3);
+    border-top: 1px solid var(--paper3);
+  }
+
+  .entries-table tbody tr {
+    page-break-inside: avoid;
+    border-bottom: 1px solid var(--paper3);
+  }
+
+  .entries-table tbody td {
+    padding: 9px 10px;
+    vertical-align: middle;
+  }
+
+  .td-date { color: var(--ink3); white-space: nowrap; font-size: 11px; }
+  .td-project { font-weight: 500; font-size: 12px; }
+  .td-hours { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 300; color: var(--ink2); white-space: nowrap; }
+  .td-notes { color: var(--ink3); font-size: 11px; max-width: 200px; }
+
+  .tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+
+  /* Total row */
+  .total-row td {
+    padding: 10px 10px;
+    font-weight: 500;
+    background: var(--paper2);
+    border-top: 2px solid var(--ink);
+    font-size: 12px;
+  }
+
+  .total-hours {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--accent);
+  }
+
+  /* Footer */
+  .doc-footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--paper3);
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--ink4);
+  }
+</style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">Save as PDF ↓</button>
+
+<div class="doc-header">
+  <div class="doc-logo">time<span>sheet</span></div>
+  <div class="doc-meta">
+    <div class="doc-period">${periodLabel}</div>
+    <div class="doc-sub">${projLabel}</div>
+  </div>
+</div>
+
+<div class="summary-grid">
+  <div class="summary-card accent">
+    <div class="sc-label">Total hours</div>
+    <div class="sc-val">${fmtHours(totalHours)}</div>
+  </div>
+  <div class="summary-card">
+    <div class="sc-label">Entries</div>
+    <div class="sc-val">${rows.length}</div>
+  </div>
+  <div class="summary-card">
+    <div class="sc-label">Projects</div>
+    <div class="sc-val">${projSummary.length}</div>
+  </div>
+</div>
+
+${projSummary.length > 1 ? `
+<div class="section-head">By project</div>
+<table class="proj-table">
+  <tbody>${proj_rows}</tbody>
+</table>` : ''}
+
+<div class="section-head">All entries</div>
+<table class="entries-table">
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Project</th>
+      <th>Task type</th>
+      <th>Hours</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${rows_html}
+    <tr class="total-row">
+      <td colspan="3" style="text-align:right;color:var(--ink3);">Total</td>
+      <td class="total-hours">${fmtHours(totalHours)}</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="doc-footer">
+  <span>Generated ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</span>
+  <span>timesheet</span>
+</div>
+
+</body>
+</html>`;
+}
+
 function doExport(type) {
   const rows = getExportRows();
   if (!rows.length) { notify('No entries in selected range.', 'error'); return; }
@@ -1034,6 +1399,13 @@ function doExport(type) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
     XLSX.writeFile(wb, filename + '.xlsx');
+  }
+  if (type === 'html') {
+    const html = buildExportHTML(rows, from, to, document.getElementById('exp-proj').value);
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    return;
   }
   closeModal('export-modal');
   notify('Export complete', 'success');
@@ -1107,6 +1479,87 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(el => el.classList.remove('open'));
 });
+
+
+// ── Tasks database ────────────────────────────────────────────────────────────
+const TASKS_DB_ID = '1de09150aa464e46a0f9fd10ce5120da';
+
+async function openFromTasks() {
+  const listEl = document.getElementById('tasks-list');
+  listEl.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--ink4);font-size:13px;">Loading tasks...</div>';
+  document.getElementById('tasks-modal').classList.add('open');
+
+  try {
+    const res = await notionRequest(`/databases/${TASKS_DB_ID}/query`, 'POST', {
+      page_size: 50,
+      sorts: [{ property: 'Start Time', direction: 'descending' }],
+      filter: {
+        and: [
+          { property: 'Start Time', date: { is_not_empty: true } },
+          { property: 'End Time', date: { is_not_empty: true } },
+          { property: 'Status', select: { equals: 'Done' } }
+        ]
+      }
+    });
+
+    const tasks = res.results.map(p => {
+      const props = p.properties;
+      const startStr = props['Start Time']?.date?.start;
+      const endStr = props['End Time']?.date?.start;
+      const durationRaw = props['Duration (hrs)']?.formula?.number || 0;
+      const duration = Math.round(durationRaw * 4) / 4; // round to nearest 0.25
+      return {
+        id: p.id,
+        title: props['Task']?.title?.[0]?.plain_text || 'Untitled',
+        project: props['Project']?.rich_text?.[0]?.plain_text || '',
+        tasktype: props['Task Type']?.select?.name || 'Other',
+        notes: props['Notes']?.rich_text?.[0]?.plain_text || '',
+        start: startStr,
+        date: startStr ? startStr.slice(0, 10) : '',
+        duration,
+      };
+    }).filter(t => t.duration > 0);
+
+    if (!tasks.length) {
+      listEl.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--ink4);font-size:13px;">No completed tasks with logged time found.<br>Mark tasks as Done and ensure Start Time and End Time are set.</div>';
+      return;
+    }
+
+    const TASK_COLORS_LOCAL = {Development:'tag-dev',Design:'tag-design',Meetings:'tag-meetings',Research:'tag-research',Admin:'tag-admin',Review:'tag-review',Testing:'tag-testing',Writing:'tag-writing',Other:'tag-other'};
+
+    listEl.innerHTML = tasks.map(t => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--paper3);gap:12px;" class="task-row">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:2px;">
+            ${t.project ? `<span style="margin-right:8px;">${esc(t.project)}</span>` : ''}
+            <span class="tag ${TASK_COLORS_LOCAL[t.tasktype] || 'tag-other'}" style="font-size:10px;">${t.tasktype}</span>
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:300;color:var(--ink2);">${fmtHours(t.duration)}</div>
+          <div style="font-size:11px;color:var(--ink4);">${fmtDate(t.date)}</div>
+        </div>
+        <button class="modal-btn primary" style="flex-shrink:0;font-size:12px;padding:6px 14px;" onclick='importTask(${JSON.stringify(t)})'>Import</button>
+      </div>`).join('');
+
+  } catch(e) {
+    listEl.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--red);font-size:13px;">Failed to load tasks: ${e.message}</div>`;
+  }
+}
+
+function importTask(task) {
+  closeModal('tasks-modal');
+  editingPageId = null;
+  document.getElementById('modal-title').textContent = 'Log time';
+  document.getElementById('m-date').value = task.date;
+  document.getElementById('m-hours').value = task.duration;
+  document.getElementById('m-project').value = task.project;
+  document.getElementById('m-task').value = task.tasktype || 'Other';
+  document.getElementById('m-notes').value = task.title + (task.notes ? ' — ' + task.notes : '');
+  document.getElementById('save-btn').textContent = 'Save entry';
+  document.getElementById('entry-modal').classList.add('open');
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 getConfig();
