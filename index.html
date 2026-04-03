@@ -715,7 +715,7 @@ async function notionRequest(path, method = 'GET', body = null) {
     }
   };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`https://api.notion.com/v1${path}`, opts);
+  const res = await fetch(`https://old-voice-0a5c.redcatauthor.workers.dev/v1${path}`, opts);
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || 'Notion API error');
   return data;
