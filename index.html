@@ -742,11 +742,16 @@
   <div class="modal" style="max-width:680px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
       <div class="modal-title" style="margin-bottom:0;">Import from tasks</div>
-      <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:11px;color:var(--ink3);">Filter:</span><select id="tasks-status-filter" onchange="filterTasksList()" style="font-size:12px;font-family:'DM Mono',monospace;border:1px solid var(--paper3);background:var(--paper2);color:var(--ink2);padding:5px 10px;border-radius:4px;cursor:pointer;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-size:11px;color:var(--ink3);">Filter:</span><select id="tasks-status-filter" onchange="filterTasksList()" style="font-size:12px;font-family:'DM Mono',monospace;border:1px solid var(--paper3);background:var(--paper2);color:var(--ink2);padding:5px 10px;border-radius:4px;cursor:pointer;">
         <option value="">All statuses</option>
         <option value="To do">To do</option>
         <option value="In progress">In progress</option>
         <option value="Done">Done</option>
+      </select>
+      <select id="tasks-logged-filter" onchange="filterTasksList()" style="font-size:12px;font-family:'DM Mono',monospace;border:1px solid var(--paper3);background:var(--paper2);color:var(--ink2);padding:5px 10px;border-radius:4px;cursor:pointer;">
+        <option value="">All tasks</option>
+        <option value="logged">Logged only</option>
+        <option value="unlogged">Not logged</option>
       </select></div>
     </div>
     <p style="font-size:12px;color:var(--ink3);margin-bottom:1rem;">Select a task to load into the timer. Fill in the details, run the timer, then save when done.</p>
@@ -1679,12 +1684,16 @@ async function openFromTasks() {
 
 function filterTasksList() {
   const status = document.getElementById('tasks-status-filter').value;
+  const logged = document.getElementById('tasks-logged-filter').value;
   const loggedTitles = new Set(
     entries
       .map(e => (e.notes || '').split(' — ')[0].trim().toLowerCase())
       .filter(Boolean)
   );
-  const filtered = status ? allTasks.filter(t => t.status === status) : allTasks;
+  let filtered = allTasks;
+  if (status) filtered = filtered.filter(t => t.status === status);
+  if (logged === 'logged') filtered = filtered.filter(t => loggedTitles.has(t.title.toLowerCase()));
+  if (logged === 'unlogged') filtered = filtered.filter(t => !loggedTitles.has(t.title.toLowerCase()));
   renderTasksList(filtered, loggedTitles);
 }
 
