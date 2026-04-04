@@ -1590,6 +1590,7 @@ async function openFromTasks() {
         id: p.id,
         title: props['Task']?.title?.[0]?.plain_text || 'Untitled',
         project: props['Project']?.rich_text?.[0]?.plain_text || props['Project']?.select?.name || '',
+        projectRelationIds: (props['Project']?.relation || []).map(r => r.id),
         tasktype: props['Task Type']?.select?.name || 'Other',
         notes: props['Notes']?.rich_text?.[0]?.plain_text || '',
         status: props['Status']?.select?.name || '',
@@ -1599,8 +1600,23 @@ async function openFromTasks() {
       };
     });
 
+    // Resolve relation project names from Red Cat projects overview
+    const allRelIds = [...new Set(tasks.flatMap(t => t.projectRelationIds || []))];
+    const projectNames = {};
+    await Promise.all(allRelIds.map(async id => {
+      try {
+        const page = await notionRequest(`/pages/${id}`);
+        projectNames[id] = page.properties?.['Project Name']?.title?.[0]?.plain_text || '';
+      } catch {}
+    }));
+    tasks.forEach(t => {
+      if (t.projectRelationIds && t.projectRelationIds.length > 0) {
+        t.project = t.projectRelationIds.map(id => projectNames[id] || '').filter(Boolean).join(', ');
+      }
+    });
+
     if (!tasks.length) {
-      listEl.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--ink4);font-size:13px;">No completed tasks with logged time found.<br>Mark tasks as Done and ensure Start Time and End Time are set.</div>';
+      listEl.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--ink4);font-size:13px;">No tasks found in your Red Cat Tasks database.</div>';
       return;
     }
 
