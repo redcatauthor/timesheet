@@ -21,7 +21,7 @@ A clean, minimal timesheet app that syncs directly with Notion. Log time, track 
 
 ### 1. Set up Notion
 
-Create a Notion integration at [notion.so/profile/integrations](https://notion.so/profile/integrations), give it a name, and copy the **Internal Integration Secret** — this is your API key.
+Create a Notion integration at [notion.so/profile/integrations](https://notion.so/profile/integrations), give it a name, and copy the **Internal Integration Secret** - this is your API key.
 
 Create two databases in Notion:
 
@@ -102,7 +102,7 @@ Open your app in the browser. On first load you'll see a setup screen — enter 
 
 ## Security
 
-Your Notion API key never appears in any file or repository — it lives only in your browser's local storage. The Cloudflare Worker is locked to your specific GitHub Pages domain, so only your app can use it. The database IDs are visible in the source but are harmless without the API key.
+Your Notion API key never appears in any file or repository - it lives only in your browser's local storage. The Cloudflare Worker is locked to your specific GitHub Pages domain, so only your app can use it. The database IDs are visible in the source but are harmless without the API key.
 
 ## Stack
 
