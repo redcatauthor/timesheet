@@ -1652,7 +1652,11 @@ async function openFromTasks() {
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:11px;color:var(--ink3);">${t.status || 'No status'}</div>
+          <select onchange="updateTaskStatus('${t.id}', this.value, this)" style="font-size:11px;font-family:'DM Mono',monospace;border:1px solid var(--paper3);background:var(--paper2);color:var(--ink2);padding:3px 6px;border-radius:4px;cursor:pointer;margin-bottom:4px;">
+            <option value="To do"${t.status === 'To do' ? ' selected' : ''}>To do</option>
+            <option value="In progress"${t.status === 'In progress' ? ' selected' : ''}>In progress</option>
+            <option value="Done"${t.status === 'Done' ? ' selected' : ''}>Done</option>
+          </select>
           ${t.duration > 0 ? `<div style="font-family:'Fraunces',serif;font-size:14px;font-weight:300;color:var(--ink2);">${fmtHours(t.duration)}</div>` : ''}
         </div>
         <button class="modal-btn${isLogged ? '' : ' primary'}" style="flex-shrink:0;font-size:12px;padding:6px 14px;" onclick='importTask(${JSON.stringify(t)})'>${isLogged ? 'Load again' : 'Load'}</button>
@@ -1734,6 +1738,32 @@ function useTimerTime() {
   el.style.borderColor = 'var(--accent)';
   setTimeout(() => { el.style.borderColor = ''; }, 1000);
   notify('Timer applied: ' + formatTimerDisplay(timerSeconds) + ' → ' + hours + 'h', 'success');
+}
+
+
+// ── Update task status ────────────────────────────────────────────────────────
+async function updateTaskStatus(pageId, status, selectEl) {
+  const originalValue = selectEl.dataset.original || selectEl.value;
+  selectEl.dataset.original = selectEl.value;
+  selectEl.disabled = true;
+  selectEl.style.opacity = '0.5';
+  try {
+    await notionRequest(`/pages/${pageId}`, 'PATCH', {
+      properties: {
+        Status: { select: { name: status } }
+      }
+    });
+    selectEl.dataset.original = status;
+    // Flash green border briefly
+    selectEl.style.borderColor = '#3B6D11';
+    setTimeout(() => { selectEl.style.borderColor = ''; }, 1000);
+    notify('Status updated to ' + status, 'success');
+  } catch(e) {
+    selectEl.value = originalValue;
+    notify('Failed to update status: ' + e.message, 'error');
+  }
+  selectEl.disabled = false;
+  selectEl.style.opacity = '';
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
