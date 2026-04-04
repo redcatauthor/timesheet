@@ -1724,7 +1724,7 @@ function renderTasksList(tasks, loggedTitles) {
           <option value="In progress"${t.status === 'In progress' ? ' selected' : ''}>In progress</option>
           <option value="Done"${t.status === 'Done' ? ' selected' : ''}>Done</option>
         </select>
-        ${t.duration > 0 ? `<div style="font-size:11px;color:var(--ink4);margin-top:2px;">${fmtHours(t.duration)} logged</div>` : ''}
+
       </div>
       <button class="modal-btn${isLogged ? '' : ' primary'}" style="flex-shrink:0;font-size:12px;padding:6px 14px;" onclick="importTaskById('${t.id}')">${isLogged ? 'Load again' : 'Load'}</button>
     </div>`;
