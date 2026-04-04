@@ -638,6 +638,12 @@
       <option>Research</option><option>Admin</option><option>Review</option>
       <option>Testing</option><option>Writing</option><option>Other</option>
     </select>
+    <select id="f-status" onchange="renderTable()">
+      <option value="">All statuses</option>
+      <option value="To do">To do</option>
+      <option value="In progress">In progress</option>
+      <option value="Done">Done</option>
+    </select>
     <button class="tool-btn" onclick="clearFilters()">Clear filters</button>
     <div class="toolbar-sep"></div>
     <button class="tool-btn" onclick="loadEntries()">↻ Refresh</button>
@@ -652,6 +658,7 @@
           <th>Task type</th>
           <th>Hours</th>
           <th>Notes</th>
+          <th>Status</th>
           <th></th>
         </tr>
       </thead>
@@ -706,6 +713,15 @@
           <option>Development</option><option>Design</option><option>Meetings</option>
           <option>Research</option><option>Admin</option><option>Review</option>
           <option>Testing</option><option>Writing</option><option>Other</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Status (optional)</label>
+        <select class="form-input" id="m-status">
+          <option value="">No status</option>
+          <option value="To do">To do</option>
+          <option value="In progress">In progress</option>
+          <option value="Done">Done</option>
         </select>
       </div>
       <div class="form-full">
@@ -848,6 +864,7 @@ function pageToEntry(page) {
       date: p.Date?.date?.start || '',
       project: p.Project?.rich_text?.[0]?.plain_text || p.Project?.select?.name || '',
       tasktype: p['Task Type']?.select?.name || 'Other',
+      status: p.Status?.select?.name || p.Status?.status?.name || (typeof p.Status === 'string' ? p.Status : '') || '',
       hours: p.Hours?.number || 0,
       notes: p.Notes?.rich_text?.[0]?.plain_text || '',
       title: p.Entry?.title?.[0]?.plain_text || '',
@@ -862,6 +879,7 @@ function entryToNotionProps(entry) {
     Date: { date: { start: entry.date } },
     Project: { select: { name: entry.project } },
     'Task Type': { select: { name: entry.tasktype } },
+    ...(entry.status ? { Status: { select: { name: entry.status } } } : {}),
     Hours: { number: entry.hours },
     Notes: { rich_text: entry.notes ? [{ text: { content: entry.notes } }] : [] },
   };
@@ -1019,6 +1037,7 @@ function openAdd() {
   document.getElementById('m-project').value = '';
   document.getElementById('m-task').value = 'Development';
   document.getElementById('m-notes').value = '';
+  document.getElementById('m-status').value = '';
   document.getElementById('save-btn').textContent = 'Save entry';
   resetTimer();
   document.getElementById('entry-modal').classList.add('open');
@@ -1044,6 +1063,7 @@ async function saveEntry() {
   const project = document.getElementById('m-project').value.trim();
   const tasktype = document.getElementById('m-task').value;
   const notes = document.getElementById('m-notes').value.trim();
+  const status = document.getElementById('m-status').value;
 
   if (!date || !hours || hours <= 0 || !project) {
     notify('Please fill in date, project and hours.', 'error'); return;
@@ -1054,7 +1074,7 @@ async function saveEntry() {
   setSyncing(true);
 
   try {
-    const entry = { date, hours, project, tasktype, notes };
+    const entry = { date, hours, project, tasktype, notes, status };
     if (editingPageId) {
       await updateEntry(editingPageId, entry);
       const idx = entries.findIndex(e => e.notionPageId === editingPageId);
@@ -1544,6 +1564,7 @@ function clearFilters() {
   ['f-from','f-to'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-proj').value = '';
   document.getElementById('f-task').value = '';
+  document.getElementById('f-status').value = '';
   renderTable();
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); if (id === 'entry-modal') stopTimer(); }
@@ -1715,6 +1736,8 @@ function importTask(task) {
   document.getElementById('m-project').value = task.project;
   document.getElementById('m-task').value = task.tasktype || 'Other';
   document.getElementById('m-notes').value = task.title + (task.notes ? ' — ' + task.notes : '');
+  document.getElementById('m-status').value = task.status || '';
+  document.getElementById('m-status').value = '';
   document.getElementById('save-btn').textContent = 'Save entry';
   resetTimer();
   document.getElementById('entry-modal').classList.add('open');
