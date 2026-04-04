@@ -489,6 +489,76 @@
 
   .footer-bar a { color: var(--accent); text-decoration: none; }
   .footer-bar a:hover { text-decoration: underline; }
+
+  /* Timer */
+  .timer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--ink);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    margin-bottom: 16px;
+  }
+
+  .timer-display {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 300;
+    color: #faf8f5;
+    letter-spacing: 2px;
+    min-width: 100px;
+  }
+
+  .timer-display.running { color: #e74c3c; }
+
+  .timer-controls { display: flex; gap: 8px; }
+
+  .timer-btn {
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid rgba(245,242,237,0.2);
+    background: transparent;
+    color: rgba(245,242,237,0.7);
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+
+  .timer-btn:hover { background: rgba(245,242,237,0.1); color: #faf8f5; }
+
+  .timer-btn.start {
+    background: #c0392b;
+    border-color: #c0392b;
+    color: white;
+  }
+
+  .timer-btn.start:hover { background: #e74c3c; border-color: #e74c3c; }
+
+  .timer-btn.stop {
+    background: rgba(245,242,237,0.15);
+    border-color: rgba(245,242,237,0.3);
+    color: #faf8f5;
+  }
+
+  .timer-use-btn {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: var(--radius);
+    border: 1px solid rgba(245,242,237,0.2);
+    background: transparent;
+    color: rgba(245,242,237,0.5);
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    transition: all 0.15s;
+    display: none;
+  }
+
+  .timer-use-btn.visible { display: inline-block; }
+  .timer-use-btn:hover { color: #faf8f5; border-color: rgba(245,242,237,0.4); }
+
 </style>
 </head>
 <body>
@@ -605,6 +675,17 @@
 <div class="modal-overlay" id="entry-modal">
   <div class="modal">
     <div class="modal-title" id="modal-title">Log time</div>
+    <div class="timer-bar">
+      <div class="timer-display" id="timer-display">00:00:00</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="timer-use-btn" id="timer-use-btn" onclick="useTimerTime()">Use this time ↑</button>
+        <div class="timer-controls">
+          <button class="timer-btn" id="timer-reset-btn" onclick="resetTimer()" style="display:none;">Reset</button>
+          <button class="timer-btn start" id="timer-start-btn" onclick="startTimer()">Start</button>
+          <button class="timer-btn stop" id="timer-stop-btn" onclick="stopTimer()" style="display:none;">Stop</button>
+        </div>
+      </div>
+    </div>
     <div class="form-row">
       <div>
         <label class="form-label">Date</label>
@@ -757,7 +838,7 @@ function pageToEntry(page) {
     return {
       notionPageId: page.id,
       date: p.Date?.date?.start || '',
-      project: p.Project?.rich_text?.[0]?.plain_text || '',
+      project: p.Project?.rich_text?.[0]?.plain_text || p.Project?.select?.name || '',
       tasktype: p['Task Type']?.select?.name || 'Other',
       hours: p.Hours?.number || 0,
       notes: p.Notes?.rich_text?.[0]?.plain_text || '',
@@ -771,7 +852,7 @@ function entryToNotionProps(entry) {
   return {
     Entry: { title: [{ text: { content: label } }] },
     Date: { date: { start: entry.date } },
-    Project: { rich_text: [{ text: { content: entry.project } }] },
+    Project: { select: { name: entry.project } },
     'Task Type': { select: { name: entry.tasktype } },
     Hours: { number: entry.hours },
     Notes: { rich_text: entry.notes ? [{ text: { content: entry.notes } }] : [] },
@@ -931,6 +1012,7 @@ function openAdd() {
   document.getElementById('m-task').value = 'Development';
   document.getElementById('m-notes').value = '';
   document.getElementById('save-btn').textContent = 'Save entry';
+  resetTimer();
   document.getElementById('entry-modal').classList.add('open');
   setTimeout(() => document.getElementById('m-project').focus(), 50);
 }
@@ -1456,7 +1538,7 @@ function clearFilters() {
   document.getElementById('f-task').value = '';
   renderTable();
 }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); if (id === 'entry-modal') stopTimer(); }
 
 let notifTimer;
 function notify(msg, type = '') {
@@ -1514,7 +1596,7 @@ async function openFromTasks() {
       return {
         id: p.id,
         title: props['Task']?.title?.[0]?.plain_text || 'Untitled',
-        project: props['Project']?.rich_text?.[0]?.plain_text || '',
+        project: props['Project']?.rich_text?.[0]?.plain_text || props['Project']?.select?.name || '',
         tasktype: props['Task Type']?.select?.name || 'Other',
         notes: props['Notes']?.rich_text?.[0]?.plain_text || '',
         start: startStr,
@@ -1561,7 +1643,60 @@ function importTask(task) {
   document.getElementById('m-task').value = task.tasktype || 'Other';
   document.getElementById('m-notes').value = task.title + (task.notes ? ' — ' + task.notes : '');
   document.getElementById('save-btn').textContent = 'Save entry';
+  resetTimer();
   document.getElementById('entry-modal').classList.add('open');
+}
+
+
+// ── Timer ─────────────────────────────────────────────────────────────────────
+let timerInterval = null;
+let timerSeconds = 0;
+let timerRunning = false;
+
+function formatTimerDisplay(secs) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function startTimer() {
+  if (timerRunning) return;
+  timerRunning = true;
+  document.getElementById('timer-display').classList.add('running');
+  document.getElementById('timer-start-btn').style.display = 'none';
+  document.getElementById('timer-stop-btn').style.display = 'inline-block';
+  document.getElementById('timer-reset-btn').style.display = 'none';
+  document.getElementById('timer-use-btn').classList.remove('visible');
+  timerInterval = setInterval(() => {
+    timerSeconds++;
+    document.getElementById('timer-display').textContent = formatTimerDisplay(timerSeconds);
+  }, 1000);
+}
+
+function stopTimer() {
+  if (!timerRunning) return;
+  timerRunning = false;
+  clearInterval(timerInterval);
+  document.getElementById('timer-display').classList.remove('running');
+  document.getElementById('timer-stop-btn').style.display = 'none';
+  document.getElementById('timer-start-btn').style.display = 'inline-block';
+  document.getElementById('timer-reset-btn').style.display = 'inline-block';
+  if (timerSeconds > 0) document.getElementById('timer-use-btn').classList.add('visible');
+}
+
+function resetTimer() {
+  stopTimer();
+  timerSeconds = 0;
+  document.getElementById('timer-display').textContent = '00:00:00';
+  document.getElementById('timer-reset-btn').style.display = 'none';
+  document.getElementById('timer-use-btn').classList.remove('visible');
+}
+
+function useTimerTime() {
+  const hours = Math.round((timerSeconds / 3600) * 4) / 4; // round to nearest 0.25
+  document.getElementById('m-hours').value = hours > 0 ? hours : '';
+  notify('Timer time applied — ' + formatTimerDisplay(timerSeconds), 'success');
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
