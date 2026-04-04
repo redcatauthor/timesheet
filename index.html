@@ -1694,9 +1694,15 @@ function resetTimer() {
 }
 
 function useTimerTime() {
-  const hours = Math.round((timerSeconds / 3600) * 4) / 4; // round to nearest 0.25
-  document.getElementById('m-hours').value = hours > 0 ? hours : '';
-  notify('Timer time applied — ' + formatTimerDisplay(timerSeconds), 'success');
+  if (timerSeconds === 0) { notify('Timer has not been started.', 'error'); return; }
+  // Round to 2 decimal places, minimum 0.25
+  const rawHours = timerSeconds / 3600;
+  const hours = Math.max(0.25, Math.round(rawHours * 100) / 100);
+  const el = document.getElementById('m-hours');
+  el.value = hours;
+  el.style.borderColor = 'var(--accent)';
+  setTimeout(() => { el.style.borderColor = ''; }, 1000);
+  notify('Timer applied: ' + formatTimerDisplay(timerSeconds) + ' → ' + hours + 'h', 'success');
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
