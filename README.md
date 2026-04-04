@@ -32,7 +32,7 @@ Create two databases in Notion:
 | Entry | Title |
 | Date | Date |
 | Project | Select |
-| Task Type |  
+| Task Type | Select |
 | Hours | Number |
 | Notes | Text |
 | Status | Select (To do, In progress, Done) |
