@@ -724,7 +724,15 @@
 <!-- From tasks modal -->
 <div class="modal-overlay" id="tasks-modal">
   <div class="modal" style="max-width:620px;">
-    <div class="modal-title">Import from tasks</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+      <div class="modal-title" style="margin-bottom:0;">Import from tasks</div>
+      <select id="tasks-status-filter" onchange="filterTasksList()" style="font-size:12px;font-family:'DM Mono',monospace;border:1px solid var(--paper3);background:var(--paper2);color:var(--ink2);padding:5px 10px;border-radius:4px;cursor:pointer;">
+        <option value="">All statuses</option>
+        <option value="To do">To do</option>
+        <option value="In progress">In progress</option>
+        <option value="Done">Done</option>
+      </select>
+    </div>
     <p style="font-size:12px;color:var(--ink3);margin-bottom:1rem;">Select a task to load into the timer. Fill in the details, run the timer, then save when done.</p>
     <div id="tasks-list" style="max-height:340px;overflow-y:auto;border:1px solid var(--paper3);border-radius:var(--radius);"></div>
     <div class="modal-actions">
@@ -1567,6 +1575,8 @@ document.addEventListener('keydown', e => {
 
 
 // ── Tasks database ────────────────────────────────────────────────────────────
+let allTasks = [];
+let taskMap = {};
 const TASKS_DB_ID = '1de09150aa464e46a0f9fd10ce5120da';
 
 async function openFromTasks() {
@@ -1601,6 +1611,8 @@ async function openFromTasks() {
       const endStr = props['End Time']?.date?.start;
       const durationRaw = props['Duration (hrs)']?.formula?.number || 0;
       const duration = Math.round(durationRaw * 4) / 4; // round to nearest 0.25
+      const rawStatus = props['Status'];
+      console.log('RAW STATUS:', JSON.stringify(rawStatus), 'type:', typeof rawStatus);
       return {
         id: p.id,
         title: props['Task']?.title?.[0]?.plain_text || 'Untitled',
@@ -1608,7 +1620,7 @@ async function openFromTasks() {
         projectRelationIds: (props['Project']?.relation || []).map(r => r.id),
         tasktype: props['Task Type']?.select?.name || 'Other',
         notes: props['Notes']?.rich_text?.[0]?.plain_text || '',
-        status: props['Status']?.select?.name || '',
+        status: (typeof props['Status'] === 'string') ? props['Status'] : (props['Status']?.select?.name || props['Status']?.status?.name || ''),
         start: startStr,
         date: startStr ? startStr.slice(0, 10) : today(),
         duration,
@@ -1637,35 +1649,63 @@ async function openFromTasks() {
 
     const TASK_COLORS_LOCAL = {Development:'tag-dev',Design:'tag-design',Meetings:'tag-meetings',Research:'tag-research',Admin:'tag-admin',Review:'tag-review',Testing:'tag-testing',Writing:'tag-writing',Other:'tag-other'};
 
-    listEl.innerHTML = tasks.map(t => {
-      const isLogged = loggedTitles.has(t.title.toLowerCase());
-      return `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--paper3);gap:12px;${isLogged ? 'opacity:0.6;' : ''}" class="task-row">
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;gap:7px;">
-            <span style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</span>
-            ${isLogged ? '<span style="flex-shrink:0;font-size:10px;font-weight:500;background:#EAF3DE;color:#27500A;padding:2px 7px;border-radius:20px;">Logged</span>' : ''}
-          </div>
-          <div style="font-size:11px;color:var(--ink3);margin-top:2px;">
-            ${t.project ? `<span style="margin-right:8px;">${esc(t.project)}</span>` : ''}
-            <span class="tag ${TASK_COLORS_LOCAL[t.tasktype] || 'tag-other'}" style="font-size:10px;">${t.tasktype}</span>
-          </div>
-        </div>
-        <div style="text-align:right;flex-shrink:0;">
-          <select onchange="updateTaskStatus('${t.id}', this.value, this)" style="font-size:11px;font-family:'DM Mono',monospace;border:1px solid var(--paper3);background:var(--paper2);color:var(--ink2);padding:3px 6px;border-radius:4px;cursor:pointer;margin-bottom:4px;">
-            <option value="To do"${t.status === 'To do' ? ' selected' : ''}>To do</option>
-            <option value="In progress"${t.status === 'In progress' ? ' selected' : ''}>In progress</option>
-            <option value="Done"${t.status === 'Done' ? ' selected' : ''}>Done</option>
-          </select>
-          ${t.duration > 0 ? `<div style="font-family:'Fraunces',serif;font-size:14px;font-weight:300;color:var(--ink2);">${fmtHours(t.duration)}</div>` : ''}
-        </div>
-        <button class="modal-btn${isLogged ? '' : ' primary'}" style="flex-shrink:0;font-size:12px;padding:6px 14px;" onclick='importTask(${JSON.stringify(t)})'>${isLogged ? 'Load again' : 'Load'}</button>
-      </div>`;
-    }).join('');
-
+    allTasks = tasks;
+    taskMap = {};
+    tasks.forEach(t => { taskMap[t.id] = t; });
+    renderTasksList(tasks, loggedTitles);
   } catch(e) {
     listEl.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--red);font-size:13px;">Failed to load tasks: ${e.message}</div>`;
   }
+}
+
+function filterTasksList() {
+  const status = document.getElementById('tasks-status-filter').value;
+  const loggedTitles = new Set(
+    entries
+      .map(e => (e.notes || '').split(' — ')[0].trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const filtered = status ? allTasks.filter(t => t.status === status) : allTasks;
+  renderTasksList(filtered, loggedTitles);
+}
+
+function renderTasksList(tasks, loggedTitles) {
+  const listEl = document.getElementById('tasks-list');
+  const TASK_COLORS_LOCAL = {Development:'tag-dev',Design:'tag-design',Meetings:'tag-meetings',Research:'tag-research',Admin:'tag-admin',Review:'tag-review',Testing:'tag-testing',Writing:'tag-writing',Other:'tag-other'};
+  if (!tasks.length) {
+    listEl.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--ink4);font-size:13px;">No tasks match the selected filter.</div>';
+    return;
+  }
+  listEl.innerHTML = tasks.map(t => {
+    const isLogged = loggedTitles.has(t.title.toLowerCase());
+    return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--paper3);gap:12px;${isLogged ? 'opacity:0.6;' : ''}" class="task-row">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <span style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</span>
+          ${isLogged ? '<span style="flex-shrink:0;font-size:10px;font-weight:500;background:#EAF3DE;color:#27500A;padding:2px 7px;border-radius:20px;">Logged</span>' : ''}
+        </div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:2px;">
+          ${t.project ? `<span style="margin-right:8px;">${esc(t.project)}</span>` : ''}
+          <span class="tag ${TASK_COLORS_LOCAL[t.tasktype] || 'tag-other'}" style="font-size:10px;">${t.tasktype}</span>
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <select onchange="updateTaskStatus('${t.id}', this.value, this)" style="font-size:11px;font-family:'DM Mono',monospace;border:1px solid var(--paper3);background:var(--paper2);color:var(--ink2);padding:3px 6px;border-radius:4px;cursor:pointer;margin-bottom:4px;">
+          <option value="To do"${t.status === 'To do' ? ' selected' : ''}>To do</option>
+          <option value="In progress"${t.status === 'In progress' ? ' selected' : ''}>In progress</option>
+          <option value="Done"${t.status === 'Done' ? ' selected' : ''}>Done</option>
+        </select>
+        ${t.duration > 0 ? `<div style="font-family:'Fraunces',serif;font-size:14px;font-weight:300;color:var(--ink2);">${fmtHours(t.duration)}</div>` : ''}
+      </div>
+      <button class="modal-btn${isLogged ? '' : ' primary'}" style="flex-shrink:0;font-size:12px;padding:6px 14px;" onclick="importTaskById('${t.id}')">${isLogged ? 'Load again' : 'Load'}</button>
+    </div>`;
+  }).join('');
+}
+
+function importTaskById(id) {
+  const task = taskMap[id];
+  if (task) importTask(task);
 }
 
 function importTask(task) {
@@ -1750,7 +1790,7 @@ async function updateTaskStatus(pageId, status, selectEl) {
   try {
     await notionRequest(`/pages/${pageId}`, 'PATCH', {
       properties: {
-        Status: { select: { name: status } }
+        Status: status
       }
     });
     selectEl.dataset.original = status;
