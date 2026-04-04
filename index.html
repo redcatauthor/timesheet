@@ -1575,10 +1575,25 @@ async function openFromTasks() {
   document.getElementById('tasks-modal').classList.add('open');
 
   try {
-    const res = await notionRequest(`/databases/${TASKS_DB_ID}/query`, 'POST', {
-      page_size: 50,
-      sorts: [{ timestamp: 'created_time', direction: 'descending' }]
-    });
+    // Fetch tasks and recent timesheet entries in parallel
+    const [res, tsRes] = await Promise.all([
+      notionRequest(`/databases/${TASKS_DB_ID}/query`, 'POST', {
+        page_size: 50,
+        sorts: [{ timestamp: 'created_time', direction: 'descending' }]
+      }),
+      notionRequest(`/databases/${DB_ID}/query`, 'POST', {
+        page_size: 100,
+        sorts: [{ property: 'Date', direction: 'descending' }]
+      })
+    ]);
+
+    // Build a set of already-logged task titles (from notes field)
+    const loggedTitles = new Set(
+      tsRes.results
+        .map(p => p.properties?.Notes?.rich_text?.[0]?.plain_text || '')
+        .filter(Boolean)
+        .map(n => n.split(' — ')[0].trim().toLowerCase())
+    );
 
     const tasks = res.results.map(p => {
       const props = p.properties;
@@ -1622,10 +1637,15 @@ async function openFromTasks() {
 
     const TASK_COLORS_LOCAL = {Development:'tag-dev',Design:'tag-design',Meetings:'tag-meetings',Research:'tag-research',Admin:'tag-admin',Review:'tag-review',Testing:'tag-testing',Writing:'tag-writing',Other:'tag-other'};
 
-    listEl.innerHTML = tasks.map(t => `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--paper3);gap:12px;" class="task-row">
+    listEl.innerHTML = tasks.map(t => {
+      const isLogged = loggedTitles.has(t.title.toLowerCase());
+      return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--paper3);gap:12px;${isLogged ? 'opacity:0.6;' : ''}" class="task-row">
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</div>
+          <div style="display:flex;align-items:center;gap:7px;">
+            <span style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</span>
+            ${isLogged ? '<span style="flex-shrink:0;font-size:10px;font-weight:500;background:#EAF3DE;color:#27500A;padding:2px 7px;border-radius:20px;">Logged</span>' : ''}
+          </div>
           <div style="font-size:11px;color:var(--ink3);margin-top:2px;">
             ${t.project ? `<span style="margin-right:8px;">${esc(t.project)}</span>` : ''}
             <span class="tag ${TASK_COLORS_LOCAL[t.tasktype] || 'tag-other'}" style="font-size:10px;">${t.tasktype}</span>
@@ -1635,8 +1655,9 @@ async function openFromTasks() {
           <div style="font-size:11px;color:var(--ink3);">${t.status || 'No status'}</div>
           ${t.duration > 0 ? `<div style="font-family:'Fraunces',serif;font-size:14px;font-weight:300;color:var(--ink2);">${fmtHours(t.duration)}</div>` : ''}
         </div>
-        <button class="modal-btn primary" style="flex-shrink:0;font-size:12px;padding:6px 14px;" onclick='importTask(${JSON.stringify(t)})'>Load</button>
-      </div>`).join('');
+        <button class="modal-btn${isLogged ? '' : ' primary'}" style="flex-shrink:0;font-size:12px;padding:6px 14px;" onclick='importTask(${JSON.stringify(t)})'>${isLogged ? 'Load again' : 'Load'}</button>
+      </div>`;
+    }).join('');
 
   } catch(e) {
     listEl.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--red);font-size:13px;">Failed to load tasks: ${e.message}</div>`;
