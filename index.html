@@ -337,6 +337,10 @@
 
   .row-actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s; }
   tbody tr:hover .row-actions { opacity: 1; }
+  .timer-running-row td { background: #fff8f0 !important; }
+  @media (prefers-color-scheme: dark) { .timer-running-row td { background: rgba(196,96,43,0.08) !important; } }
+  .timer-live-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--accent); }
+  .timer-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; }
 
   .act-btn {
     padding: 4px 10px;
@@ -656,6 +660,7 @@
     <table>
       <thead>
         <tr>
+          <th></th>
           <th>Date</th>
           <th>Project</th>
           <th>Task type</th>
@@ -1036,8 +1041,10 @@ function renderTable() {
 
   filtered.forEach(e => {
     const tr = document.createElement('tr');
+    if (e.notionPageId === activeTimerPageId && timerRunning) tr.classList.add('timer-running-row');
     const tag = TASK_TAGS[e.tasktype] || 'tag-other';
     tr.innerHTML = `
+      <td style="width:20px;padding-right:0;">${e.notionPageId === activeTimerPageId && timerRunning ? '<span class="timer-live-badge"><span class="timer-pulse"></span></span>' : ''}</td>
       <td class="td-date">${fmtDate(e.date)}</td>
       <td class="td-project">${esc(e.project) || '—'}</td>
       <td><span class="tag ${tag}">${e.tasktype}</span></td>
@@ -1138,9 +1145,29 @@ function openEdit(pageId) {
   document.getElementById('m-date').value = e.date;
   document.getElementById('m-hours').value = e.hours;
   document.getElementById('m-project').value = e.project;
-  document.getElementById('m-task').value = e.tasktype;
-  document.getElementById('m-notes').value = e.notes;
+  const taskEl = document.getElementById('m-task');
+  taskEl.value = e.tasktype || 'Other';
+  if (!taskEl.value) taskEl.value = 'Other';
+  document.getElementById('m-notes').value = e.notes || '';
+  document.getElementById('m-status').value = e.status || '';
+  document.getElementById('m-label').value = e.label || '';
   document.getElementById('save-btn').textContent = 'Save changes';
+  // If timer is running for this entry, show it running in the modal
+  // If timer is running for a DIFFERENT entry, reset it first
+  if (timerRunning && activeTimerPageId !== pageId) {
+    if (!confirm('A timer is running for a different entry. Stop it and open this one?')) return;
+    resetTimer();
+  }
+  // Don't reset timer if it's running for this entry - let it keep going
+  if (!timerRunning) {
+    timerSeconds = 0;
+    document.getElementById('timer-display').textContent = '00:00:00';
+    document.getElementById('timer-reset-btn').style.display = 'none';
+    document.getElementById('timer-use-btn').classList.remove('visible');
+    document.getElementById('timer-start-btn').style.display = 'inline-block';
+    document.getElementById('timer-stop-btn').style.display = 'none';
+    document.getElementById('timer-display').classList.remove('running');
+  }
   document.getElementById('entry-modal').classList.add('open');
 }
 
@@ -1264,6 +1291,7 @@ function buildExportHTML(rows, from, to, projFilter) {
 
   const rows_html = rows.map(e => `
     <tr>
+      <td style="width:20px;padding-right:0;">${e.notionPageId === activeTimerPageId && timerRunning ? '<span class="timer-live-badge"><span class="timer-pulse"></span></span>' : ''}</td>
       <td class="td-date">${fmtDate(e.date)}</td>
       <td class="td-project">${esc(e.project)||'—'}</td>
       <td><span class="tag" style="background:${TASK_BG_HEX[e.tasktype]||'#f0f0f0'};color:${TASK_COLORS_HEX[e.tasktype]||'#444'}">${e.tasktype}</span></td>
@@ -1674,7 +1702,14 @@ function clearFilters() {
   document.getElementById('f-label').value = '';
   renderTable();
 }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); if (id === 'entry-modal') stopTimer(); }
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  if (id === 'entry-modal') {
+    // Only stop the timer if it's not tracking an active entry
+    // (i.e. don't kill a running timer just because user closed the modal)
+    if (!timerRunning) stopTimer();
+  }
+}
 
 let notifTimer;
 function notify(msg, type = '') {
@@ -1891,6 +1926,7 @@ function importTask(task) {
 let timerInterval = null;
 let timerSeconds = 0;
 let timerRunning = false;
+let activeTimerPageId = null; // tracks which entry the timer is running for
 
 function formatTimerDisplay(secs) {
   const h = Math.floor(secs / 3600);
@@ -1902,6 +1938,7 @@ function formatTimerDisplay(secs) {
 function startTimer() {
   if (timerRunning) return;
   timerRunning = true;
+  activeTimerPageId = editingPageId; // track which entry this timer belongs to
   document.getElementById('timer-display').classList.add('running');
   document.getElementById('timer-start-btn').style.display = 'none';
   document.getElementById('timer-stop-btn').style.display = 'inline-block';
@@ -1910,7 +1947,14 @@ function startTimer() {
   timerInterval = setInterval(() => {
     timerSeconds++;
     document.getElementById('timer-display').textContent = formatTimerDisplay(timerSeconds);
+    // Refresh the row indicator every second
+    const rows = document.querySelectorAll('#tbody tr');
+    rows.forEach(r => {
+      r.classList.toggle('timer-running-row',
+        activeTimerPageId && r.querySelector(`[onclick*="${activeTimerPageId}"]`) !== null);
+    });
   }, 1000);
+  renderTable(); // show indicator immediately
 }
 
 function stopTimer() {
@@ -1927,9 +1971,11 @@ function stopTimer() {
 function resetTimer() {
   stopTimer();
   timerSeconds = 0;
+  activeTimerPageId = null;
   document.getElementById('timer-display').textContent = '00:00:00';
   document.getElementById('timer-reset-btn').style.display = 'none';
   document.getElementById('timer-use-btn').classList.remove('visible');
+  renderTable();
 }
 
 function useTimerTime() {
