@@ -1189,9 +1189,9 @@ async function saveEntry() {
   if ((!hours || hours <= 0) && !timerHasTime) {
     notify('Please enter hours, or start the timer first.', 'error'); return;
   }
-  // If no hours entered but timer has time, auto-apply the timer
+  // If no hours entered but timer has meaningful time (>= 30 seconds), auto-apply
   let finalHours = hours > 0 ? hours : 0;
-  if (finalHours === 0 && timerHasTime && timerSeconds > 0) {
+  if (finalHours === 0 && timerSeconds >= 30) {
     finalHours = Math.max(0.25, Math.round((timerSeconds / 3600) * 100) / 100);
     document.getElementById('m-hours').value = finalHours;
   }
@@ -1210,6 +1210,11 @@ async function saveEntry() {
     } else {
       const page = await createEntry(entry);
       entries.unshift({ notionPageId: page.id, ...entry });
+      // If timer is still running, link it to the newly created entry
+      if (timerRunning) {
+        activeTimerPageId = page.id;
+        renderTable(); // show timer indicator on the new row
+      }
       notify('Entry saved to Notion', 'success');
     }
     updateStats(); updateProjFilter(); renderTable();
