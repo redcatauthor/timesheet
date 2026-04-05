@@ -1189,8 +1189,12 @@ async function saveEntry() {
   if ((!hours || hours <= 0) && !timerHasTime) {
     notify('Please enter hours, or start the timer first.', 'error'); return;
   }
-  // If no hours but timer is running/has time, default to 0 (user will use timer)
-  const finalHours = hours > 0 ? hours : 0;
+  // If no hours entered but timer has time, auto-apply the timer
+  let finalHours = hours > 0 ? hours : 0;
+  if (finalHours === 0 && timerHasTime && timerSeconds > 0) {
+    finalHours = Math.max(0.25, Math.round((timerSeconds / 3600) * 100) / 100);
+    document.getElementById('m-hours').value = finalHours;
+  }
 
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving...';
@@ -1744,7 +1748,7 @@ let allTasks = [];
 let taskMap = {};
 let notionProjects = [];
 const TASKS_DB_ID = '1de09150aa464e46a0f9fd10ce5120da';
-const PROJECTS_DB_ID = '29096456-eed9-8142-9d5a-000b8aa31309';
+const PROJECTS_DB_ID = '29096456eed98151a64bcb3b400932a8';
 
 async function openFromTasks() {
   const listEl = document.getElementById('tasks-list');
