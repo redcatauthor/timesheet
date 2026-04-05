@@ -980,11 +980,11 @@ async function setupConnect() {
 function showApp() {
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'block';
-  fetchNotionProjects().then(() => updateProjFilter());
   const now = new Date();
   document.getElementById('footer-period').textContent =
     now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-  loadEntries();
+  // Run both fetches in parallel, update proj filter when both complete
+  Promise.all([loadEntries(), fetchNotionProjects()]).then(() => updateProjFilter());
 }
 
 // ── Load & render ─────────────────────────────────────────────────────────────
@@ -995,6 +995,7 @@ async function loadEntries() {
   try {
     await fetchAllEntries();
     updateStats();
+    // updateProjFilter called after fetchNotionProjects completes in showApp
     updateProjFilter();
     renderTable();
     notify('Loaded ' + entries.length + ' entries', 'success');
@@ -1041,10 +1042,11 @@ function renderTable() {
 
   filtered.forEach(e => {
     const tr = document.createElement('tr');
+    tr.setAttribute('data-pageid', e.notionPageId);
     if (e.notionPageId === activeTimerPageId && timerRunning) tr.classList.add('timer-running-row');
     const tag = TASK_TAGS[e.tasktype] || 'tag-other';
     tr.innerHTML = `
-      <td style="width:20px;padding-right:0;">${e.notionPageId === activeTimerPageId && timerRunning ? '<span class="timer-live-badge"><span class="timer-pulse"></span></span>' : ''}</td>
+      <td class="timer-indicator-cell" style="width:80px;padding-right:0;">${e.notionPageId === activeTimerPageId && timerRunning ? `<span class="timer-live-badge"><span class="timer-pulse"></span>${formatTimerDisplay(timerSeconds)}</span>` : ''}</td>
       <td class="td-date">${fmtDate(e.date)}</td>
       <td class="td-project">${esc(e.project) || '—'}</td>
       <td><span class="tag ${tag}">${e.tasktype}</span></td>
@@ -1291,7 +1293,7 @@ function buildExportHTML(rows, from, to, projFilter) {
 
   const rows_html = rows.map(e => `
     <tr>
-      <td style="width:20px;padding-right:0;">${e.notionPageId === activeTimerPageId && timerRunning ? '<span class="timer-live-badge"><span class="timer-pulse"></span></span>' : ''}</td>
+      <td class="timer-indicator-cell" style="width:80px;padding-right:0;">${e.notionPageId === activeTimerPageId && timerRunning ? `<span class="timer-live-badge"><span class="timer-pulse"></span>${formatTimerDisplay(timerSeconds)}</span>` : ''}</td>
       <td class="td-date">${fmtDate(e.date)}</td>
       <td class="td-project">${esc(e.project)||'—'}</td>
       <td><span class="tag" style="background:${TASK_BG_HEX[e.tasktype]||'#f0f0f0'};color:${TASK_COLORS_HEX[e.tasktype]||'#444'}">${e.tasktype}</span></td>
@@ -1946,15 +1948,27 @@ function startTimer() {
   document.getElementById('timer-use-btn').classList.remove('visible');
   timerInterval = setInterval(() => {
     timerSeconds++;
-    document.getElementById('timer-display').textContent = formatTimerDisplay(timerSeconds);
-    // Refresh the row indicator every second
-    const rows = document.querySelectorAll('#tbody tr');
-    rows.forEach(r => {
-      r.classList.toggle('timer-running-row',
-        activeTimerPageId && r.querySelector(`[onclick*="${activeTimerPageId}"]`) !== null);
-    });
+    const display = formatTimerDisplay(timerSeconds);
+    document.getElementById('timer-display').textContent = display;
+    // Update the live timer cell in the main table row directly
+    if (activeTimerPageId) {
+      const row = document.querySelector(`#tbody tr[data-pageid="${activeTimerPageId}"]`);
+      if (row) {
+        row.classList.add('timer-running-row');
+        const timerCell = row.querySelector('.timer-indicator-cell');
+        if (timerCell) timerCell.innerHTML = `<span class="timer-live-badge"><span class="timer-pulse"></span>${display}</span>`;
+      }
+    }
   }, 1000);
-  renderTable(); // show indicator immediately
+  // Show indicator immediately on the row
+  if (activeTimerPageId) {
+    const row = document.querySelector(`#tbody tr[data-pageid="${activeTimerPageId}"]`);
+    if (row) {
+      row.classList.add('timer-running-row');
+      const timerCell = row.querySelector('.timer-indicator-cell');
+      if (timerCell) timerCell.innerHTML = `<span class="timer-live-badge"><span class="timer-pulse"></span>00:00:00</span>`;
+    }
+  }
 }
 
 function stopTimer() {
@@ -1966,6 +1980,15 @@ function stopTimer() {
   document.getElementById('timer-start-btn').style.display = 'inline-block';
   document.getElementById('timer-reset-btn').style.display = 'inline-block';
   if (timerSeconds > 0) document.getElementById('timer-use-btn').classList.add('visible');
+  // Clear the live indicator from the row
+  if (activeTimerPageId) {
+    const row = document.querySelector(`#tbody tr[data-pageid="${activeTimerPageId}"]`);
+    if (row) {
+      row.classList.remove('timer-running-row');
+      const timerCell = row.querySelector('.timer-indicator-cell');
+      if (timerCell) timerCell.innerHTML = '';
+    }
+  }
 }
 
 function resetTimer() {
