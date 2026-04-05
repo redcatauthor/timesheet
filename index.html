@@ -638,6 +638,9 @@
       <option>Research</option><option>Admin</option><option>Review</option>
       <option>Testing</option><option>Writing</option><option>Other</option>
     </select>
+    <select id="f-label" onchange="renderTable()">
+      <option value="">All labels</option>
+    </select>
     <select id="f-status" onchange="renderTable()">
       <option value="">All statuses</option>
       <option value="To do">To do</option>
@@ -658,6 +661,7 @@
           <th>Task type</th>
           <th>Hours</th>
           <th>Notes</th>
+          <th>Label</th>
           <th>Status</th>
           <th></th>
         </tr>
@@ -752,6 +756,9 @@
         <option value="">All tasks</option>
         <option value="logged">Logged only</option>
         <option value="unlogged">Not logged</option>
+      </select>
+      <select id="tasks-label-filter" onchange="filterTasksList()" style="font-size:12px;font-family:'DM Mono',monospace;border:1px solid var(--paper3);background:var(--paper2);color:var(--ink2);padding:5px 10px;border-radius:4px;cursor:pointer;">
+        <option value="">All labels</option>
       </select></div>
     </div>
     <p style="font-size:12px;color:var(--ink3);margin-bottom:1rem;">Select a task to load into the timer. Fill in the details, run the timer, then save when done.</p>
@@ -870,6 +877,7 @@ function pageToEntry(page) {
       project: p.Project?.rich_text?.[0]?.plain_text || p.Project?.select?.name || '',
       tasktype: p['Task Type']?.select?.name || 'Other',
       status: p.Status?.select?.name || p.Status?.status?.name || (typeof p.Status === 'string' ? p.Status : '') || '',
+      label: p.Label?.select?.name || (typeof p.Label === 'string' ? p.Label : '') || '',
       hours: p.Hours?.number || 0,
       notes: p.Notes?.rich_text?.[0]?.plain_text || '',
       title: p.Entry?.title?.[0]?.plain_text || '',
@@ -964,12 +972,16 @@ function renderTable() {
   const to = document.getElementById('f-to').value;
   const proj = document.getElementById('f-proj').value;
   const task = document.getElementById('f-task').value;
+  const status = document.getElementById('f-status').value;
+  const label = document.getElementById('f-label').value;
 
   const filtered = entries.filter(e => {
     if (from && e.date < from) return false;
     if (to && e.date > to) return false;
     if (proj && e.project !== proj) return false;
     if (task && e.tasktype !== task) return false;
+    if (status && e.status !== status) return false;
+    if (label && e.label !== label) return false;
     return true;
   });
 
@@ -1019,6 +1031,14 @@ function updateStats() {
   const top = Object.entries(ph).sort((a,b) => b[1]-a[1])[0];
   document.getElementById('s-proj').textContent = top ? top[0] : '—';
   document.getElementById('s-proj-sub').textContent = top ? fmtHours(top[1]) + ' this month' : 'this month';
+}
+
+function updateLabelFilter() {
+  const labels = [...new Set(entries.map(e => e.label).filter(Boolean))].sort();
+  const sel = document.getElementById('f-label'), cur = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  labels.forEach(l => { const o = document.createElement('option'); o.value = l; o.textContent = l; sel.appendChild(o); });
+  if (labels.includes(cur)) sel.value = cur;
 }
 
 function updateProjFilter() {
@@ -1570,6 +1590,7 @@ function clearFilters() {
   document.getElementById('f-proj').value = '';
   document.getElementById('f-task').value = '';
   document.getElementById('f-status').value = '';
+  document.getElementById('f-label').value = '';
   renderTable();
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); if (id === 'entry-modal') stopTimer(); }
@@ -1645,6 +1666,7 @@ async function openFromTasks() {
         tasktype: props['Task Type']?.select?.name || 'Other',
         notes: props['Notes']?.rich_text?.[0]?.plain_text || '',
         status: (typeof props['Status'] === 'string') ? props['Status'] : (props['Status']?.select?.name || props['Status']?.status?.name || ''),
+        label: props['Label']?.select?.name || (typeof props['Label'] === 'string' ? props['Label'] : '') || '',
         start: startStr,
         date: startStr ? startStr.slice(0, 10) : today(),
         duration,
@@ -1676,6 +1698,13 @@ async function openFromTasks() {
     allTasks = tasks;
     taskMap = {};
     tasks.forEach(t => { taskMap[t.id] = t; });
+    // Populate label filter with unique labels from tasks
+    const labelSel = document.getElementById('tasks-label-filter');
+    const curLabel = labelSel.value;
+    while (labelSel.options.length > 1) labelSel.remove(1);
+    const uniqueLabels = [...new Set(tasks.map(t => t.label).filter(Boolean))].sort();
+    uniqueLabels.forEach(l => { const o = document.createElement('option'); o.value = l; o.textContent = l; labelSel.appendChild(o); });
+    if (uniqueLabels.includes(curLabel)) labelSel.value = curLabel;
     renderTasksList(tasks, loggedTitles);
   } catch(e) {
     listEl.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--red);font-size:13px;">Failed to load tasks: ${e.message}</div>`;
@@ -1685,6 +1714,7 @@ async function openFromTasks() {
 function filterTasksList() {
   const status = document.getElementById('tasks-status-filter').value;
   const logged = document.getElementById('tasks-logged-filter').value;
+  const label = document.getElementById('tasks-label-filter').value;
   const loggedTitles = new Set(
     entries
       .map(e => (e.notes || '').split(' — ')[0].trim().toLowerCase())
@@ -1694,6 +1724,7 @@ function filterTasksList() {
   if (status) filtered = filtered.filter(t => t.status === status);
   if (logged === 'logged') filtered = filtered.filter(t => loggedTitles.has(t.title.toLowerCase()));
   if (logged === 'unlogged') filtered = filtered.filter(t => !loggedTitles.has(t.title.toLowerCase()));
+  if (label) filtered = filtered.filter(t => t.label === label);
   renderTasksList(filtered, loggedTitles);
 }
 
