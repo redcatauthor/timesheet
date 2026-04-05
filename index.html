@@ -1796,8 +1796,6 @@ function importTask(task) {
   document.getElementById('m-notes').value = task.title + (task.notes ? ' — ' + task.notes : '');
   document.getElementById('m-status').value = task.status || '';
   document.getElementById('m-label').value = task.label || '';
-  document.getElementById('m-status').value = '';
-  document.getElementById('m-label').value = '';
   document.getElementById('save-btn').textContent = 'Save entry';
   resetTimer();
   document.getElementById('entry-modal').classList.add('open');
