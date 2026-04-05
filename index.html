@@ -975,6 +975,7 @@ async function setupConnect() {
 function showApp() {
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'block';
+  fetchNotionProjects().then(() => updateProjFilter());
   const now = new Date();
   document.getElementById('footer-period').textContent =
     now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
@@ -1081,8 +1082,28 @@ function updateLabelFilter() {
   if (labels.includes(cur)) sel.value = cur;
 }
 
+async function fetchNotionProjects() {
+  try {
+    let all = [], cursor;
+    do {
+      const body = { page_size: 100 };
+      if (cursor) body.start_cursor = cursor;
+      const res = await notionRequest(`/databases/${PROJECTS_DB_ID}/query`, 'POST', body);
+      res.results.forEach(p => {
+        const name = p.properties?.['Project Name']?.title?.[0]?.plain_text || '';
+        if (name) all.push(name);
+      });
+      cursor = res.has_more ? res.next_cursor : undefined;
+    } while (cursor);
+    notionProjects = all.sort();
+  } catch(e) {
+    console.warn('Could not fetch Notion projects:', e.message);
+  }
+}
+
 function updateProjFilter() {
-  const projs = [...new Set(entries.map(e => e.project).filter(Boolean))].sort();
+  const timesheetProjs = [...new Set(entries.map(e => e.project).filter(Boolean))];
+  const projs = [...new Set([...timesheetProjs, ...notionProjects])].sort();
   ['f-proj', 'exp-proj'].forEach(id => {
     const sel = document.getElementById(id), cur = sel.value;
     while (sel.options.length > 1) sel.remove(1);
@@ -1684,7 +1705,9 @@ document.addEventListener('keydown', e => {
 // ── Tasks database ────────────────────────────────────────────────────────────
 let allTasks = [];
 let taskMap = {};
+let notionProjects = [];
 const TASKS_DB_ID = '1de09150aa464e46a0f9fd10ce5120da';
+const PROJECTS_DB_ID = '29096456-eed9-8142-9d5a-000b8aa31309';
 
 async function openFromTasks() {
   const listEl = document.getElementById('tasks-list');
