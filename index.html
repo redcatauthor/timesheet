@@ -728,6 +728,21 @@
           <option value="Done">Done</option>
         </select>
       </div>
+      <div>
+        <label class="form-label">Label (optional)</label>
+        <select class="form-input" id="m-label">
+          <option value="">No label</option>
+          <option>AI Learning</option>
+          <option>Red Cat Accounts</option>
+          <option>Red Cat Job Seeking</option>
+          <option>Red Cat Website</option>
+          <option>Red Cat Admin</option>
+          <option>Red Cat Tools</option>
+          <option>Red Cat Blog</option>
+          <option>Simplify VMS Admin</option>
+          <option>Simplify VMS Docs</option>
+        </select>
+      </div>
       <div class="form-full">
         <label class="form-label">Notes (optional)</label>
         <textarea class="form-input" id="m-notes" placeholder="What did you work on?"></textarea>
@@ -893,6 +908,7 @@ function entryToNotionProps(entry) {
     Project: { select: { name: entry.project } },
     'Task Type': { select: { name: entry.tasktype } },
     ...(entry.status ? { Status: { select: { name: entry.status } } } : {}),
+    ...(entry.label ? { Label: { select: { name: entry.label } } } : {}),
     Hours: { number: entry.hours },
     Notes: { rich_text: entry.notes ? [{ text: { content: entry.notes } }] : [] },
   };
@@ -1063,6 +1079,7 @@ function openAdd() {
   document.getElementById('m-task').value = 'Development';
   document.getElementById('m-notes').value = '';
   document.getElementById('m-status').value = '';
+  document.getElementById('m-label').value = '';
   document.getElementById('save-btn').textContent = 'Save entry';
   resetTimer();
   document.getElementById('entry-modal').classList.add('open');
@@ -1089,6 +1106,7 @@ async function saveEntry() {
   const tasktype = document.getElementById('m-task').value;
   const notes = document.getElementById('m-notes').value.trim();
   const status = document.getElementById('m-status').value;
+  const label = document.getElementById('m-label').value;
 
   if (!date || !hours || hours <= 0 || !project) {
     notify('Please fill in date, project and hours.', 'error'); return;
@@ -1099,7 +1117,7 @@ async function saveEntry() {
   setSyncing(true);
 
   try {
-    const entry = { date, hours, project, tasktype, notes, status };
+    const entry = { date, hours, project, tasktype, notes, status, label };
     if (editingPageId) {
       await updateEntry(editingPageId, entry);
       const idx = entries.findIndex(e => e.notionPageId === editingPageId);
@@ -1777,7 +1795,9 @@ function importTask(task) {
   document.getElementById('m-task').value = task.tasktype || 'Other';
   document.getElementById('m-notes').value = task.title + (task.notes ? ' — ' + task.notes : '');
   document.getElementById('m-status').value = task.status || '';
+  document.getElementById('m-label').value = task.label || '';
   document.getElementById('m-status').value = '';
+  document.getElementById('m-label').value = '';
   document.getElementById('save-btn').textContent = 'Save entry';
   resetTimer();
   document.getElementById('entry-modal').classList.add('open');
