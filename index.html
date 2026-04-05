@@ -792,8 +792,8 @@
     <p style="font-size:13px;color:var(--ink2);margin-bottom:1.5rem;">What would you like to do with <span id="delete-modal-label" style="font-weight:500;"></span>?</p>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <button class="modal-btn" onclick="doDelete(false)" style="text-align:left;padding:12px 16px;">
-        <div style="font-weight:500;font-size:13px;">Remove from app only</div>
-        <div style="font-size:11px;color:var(--ink3);margin-top:2px;">Entry stays in your Notion Timesheet database</div>
+        <div style="font-weight:500;font-size:13px;">Hide for this session only</div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:2px;">Entry stays in Notion and will reappear on next reload</div>
       </button>
       <button class="modal-btn danger" onclick="doDelete(true)" style="text-align:left;padding:12px 16px;">
         <div style="font-weight:500;font-size:13px;">Remove from app and Notion</div>
@@ -1132,16 +1132,22 @@ async function saveEntry() {
   const status = document.getElementById('m-status').value;
   const label = document.getElementById('m-label').value;
 
-  if (!date || !hours || hours <= 0 || !project) {
-    notify('Please fill in date, project and hours.', 'error'); return;
+  const timerHasTime = timerSeconds > 0 || timerRunning;
+  if (!date || !project) {
+    notify('Please fill in date and project.', 'error'); return;
   }
+  if ((!hours || hours <= 0) && !timerHasTime) {
+    notify('Please enter hours, or start the timer first.', 'error'); return;
+  }
+  // If no hours but timer is running/has time, default to 0 (user will use timer)
+  const finalHours = hours > 0 ? hours : 0;
 
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving...';
   setSyncing(true);
 
   try {
-    const entry = { date, hours, project, tasktype, notes, status, label };
+    const entry = { date, hours: finalHours, project, tasktype, notes, status, label };
     if (editingPageId) {
       await updateEntry(editingPageId, entry);
       const idx = entries.findIndex(e => e.notionPageId === editingPageId);
