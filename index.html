@@ -1042,6 +1042,8 @@ function renderTable() {
       <td><span class="tag ${tag}">${e.tasktype}</span></td>
       <td class="td-hours">${fmtHours(e.hours)}</td>
       <td class="td-notes" title="${esc(e.notes)}">${esc(e.notes) || ''}</td>
+      <td style="white-space:nowrap;">${e.label ? `<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;background:#FAEEDA;color:#633806;">${esc(e.label)}</span>` : ''}</td>
+      <td style="white-space:nowrap;">${e.status ? `<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;background:${e.status==='Done'?'#EAF3DE':e.status==='In progress'?'#E6F1FB':'#f0f0f0'};color:${e.status==='Done'?'#27500A':e.status==='In progress'?'#0C447C':'#555'}">${e.status}</span>` : ''}</td>
       <td>
         <div class="row-actions">
           <button class="act-btn" onclick="openEdit('${e.notionPageId}')">Edit</button>
@@ -1715,7 +1717,7 @@ async function openFromTasks() {
         title: props['Task']?.title?.[0]?.plain_text || 'Untitled',
         project: props['Project']?.rich_text?.[0]?.plain_text || props['Project']?.select?.name || '',
         projectRelationIds: (props['Project']?.relation || []).map(r => r.id),
-        tasktype: props['Task Type']?.select?.name || 'Other',
+        tasktype: props['Task Type']?.select?.name || (typeof props['Task Type'] === 'string' ? props['Task Type'] : '') || 'Other',
         notes: props['Notes']?.rich_text?.[0]?.plain_text || '',
         status: (typeof props['Status'] === 'string') ? props['Status'] : (props['Status']?.select?.name || props['Status']?.status?.name || ''),
         label: props['Label']?.select?.name || (typeof props['Label'] === 'string' ? props['Label'] : '') || '',
@@ -1731,8 +1733,16 @@ async function openFromTasks() {
     await Promise.all(allRelIds.map(async id => {
       try {
         const page = await notionRequest(`/pages/${id}`);
-        projectNames[id] = page.properties?.['Project Name']?.title?.[0]?.plain_text || '';
-      } catch {}
+        // Try 'Project Name' first, then any title property
+        const props = page.properties || {};
+        const titleProp = Object.values(props).find(p => p.type === 'title');
+        projectNames[id] = props['Project Name']?.title?.[0]?.plain_text
+          || (titleProp?.title?.[0]?.plain_text)
+          || page.properties?.Name?.title?.[0]?.plain_text
+          || '';
+      } catch(e) {
+        console.warn('Could not resolve project page', id, e.message);
+      }
     }));
     tasks.forEach(t => {
       if (t.projectRelationIds && t.projectRelationIds.length > 0) {
@@ -1825,8 +1835,20 @@ function importTask(task) {
   document.getElementById('modal-title').textContent = 'Log time';
   document.getElementById('m-date').value = task.date;
   document.getElementById('m-hours').value = task.duration;
-  document.getElementById('m-project').value = task.project;
-  document.getElementById('m-task').value = task.tasktype || 'Other';
+  document.getElementById('m-project').value = task.project || '';
+  // Update datalist with task's project if not already present
+  if (task.project) {
+    const dl = document.getElementById('proj-list');
+    const exists = Array.from(dl.options).some(o => o.value === task.project);
+    if (!exists) {
+      const opt = document.createElement('option');
+      opt.value = task.project;
+      dl.appendChild(opt);
+    }
+  }
+  const taskEl = document.getElementById('m-task');
+  taskEl.value = task.tasktype || 'Other';
+  if (!taskEl.value || taskEl.value !== (task.tasktype || 'Other')) taskEl.value = 'Other';
   document.getElementById('m-notes').value = task.title + (task.notes ? ' — ' + task.notes : '');
   document.getElementById('m-status').value = task.status || '';
   document.getElementById('m-label').value = task.label || '';
