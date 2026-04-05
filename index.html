@@ -784,6 +784,28 @@
   </div>
 </div>
 
+<!-- Delete modal -->
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title">Remove entry</div>
+    <input type="hidden" id="delete-modal-pageid">
+    <p style="font-size:13px;color:var(--ink2);margin-bottom:1.5rem;">What would you like to do with <span id="delete-modal-label" style="font-weight:500;"></span>?</p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="modal-btn" onclick="doDelete(false)" style="text-align:left;padding:12px 16px;">
+        <div style="font-weight:500;font-size:13px;">Remove from app only</div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:2px;">Entry stays in your Notion Timesheet database</div>
+      </button>
+      <button class="modal-btn danger" onclick="doDelete(true)" style="text-align:left;padding:12px 16px;">
+        <div style="font-weight:500;font-size:13px;">Remove from app and Notion</div>
+        <div style="font-size:11px;color:var(--red);margin-top:2px;">Entry is permanently archived in Notion</div>
+      </button>
+    </div>
+    <div class="modal-actions" style="margin-top:1rem;">
+      <button class="modal-btn" onclick="document.getElementById('delete-modal').classList.remove('open')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Export modal -->
 <div class="modal-overlay" id="export-modal">
   <div class="modal">
@@ -1139,19 +1161,31 @@ async function saveEntry() {
   setSyncing(false);
 }
 
-async function confirmDelete(pageId) {
+function confirmDelete(pageId) {
   const e = entries.find(x => x.notionPageId === pageId);
-  if (!confirm(`Delete "${e?.project || 'this entry'}" from Notion?`)) return;
-  setSyncing(true);
-  try {
-    await deleteEntry(pageId);
-    entries = entries.filter(e => e.notionPageId !== pageId);
-    updateStats(); updateProjFilter(); renderTable();
-    notify('Entry deleted', 'success');
-  } catch(e) {
-    notify('Delete failed: ' + e.message, 'error');
+  const project = e?.project || 'this entry';
+  document.getElementById('delete-modal-label').textContent = `"${project}"`;
+  document.getElementById('delete-modal-pageid').value = pageId;
+  document.getElementById('delete-modal').classList.add('open');
+}
+
+async function doDelete(alsoNotion) {
+  const pageId = document.getElementById('delete-modal-pageid').value;
+  document.getElementById('delete-modal').classList.remove('open');
+  if (alsoNotion) {
+    setSyncing(true);
+    try {
+      await deleteEntry(pageId);
+      notify('Deleted from app and Notion', 'success');
+    } catch(e) {
+      notify('Notion delete failed: ' + e.message, 'error');
+    }
+    setSyncing(false);
+  } else {
+    notify('Removed from app only', 'success');
   }
-  setSyncing(false);
+  entries = entries.filter(e => e.notionPageId !== pageId);
+  updateStats(); updateProjFilter(); updateLabelFilter(); renderTable();
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────
