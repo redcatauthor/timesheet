@@ -184,6 +184,23 @@
 
   .header-btn.primary:hover { background: var(--accent2); border-color: var(--accent2); }
 
+  /* Timer running indicator in header */
+  .header-timer-pill {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--accent2);
+    font-family: 'DM Mono', monospace;
+    background: rgba(231,76,60,0.12);
+    border: 1px solid rgba(231,76,60,0.25);
+    border-radius: var(--radius);
+    padding: 5px 12px;
+    cursor: pointer;
+  }
+  .header-timer-pill.visible { display: flex; }
+  .header-timer-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); animation: pulse 1s infinite; }
+
   .sync-dot {
     width: 7px; height: 7px; border-radius: 50%;
     display: inline-block; margin-right: 6px;
@@ -600,6 +617,11 @@
       <span id="sync-indicator" style="font-size:11px;color:rgba(245,242,237,0.5);display:flex;align-items:center;">
         <span class="sync-dot" id="sync-dot"></span><span id="sync-text">Synced</span>
       </span>
+      <!-- Persistent timer pill — visible whenever timer is running, even with modal closed -->
+      <div class="header-timer-pill" id="header-timer-pill" onclick="reopenTimerModal()" title="Timer running — click to open">
+        <span class="header-timer-pill-dot"></span>
+        <span id="header-timer-display">00:00:00</span>
+      </div>
       <button class="header-btn" onclick="openExport()">Export</button>
       <button class="header-btn" onclick="openSettings()">Settings</button>
       <button class="header-btn" onclick="openFromTasks()">From tasks</button>
@@ -983,7 +1005,8 @@ function showApp() {
   const now = new Date();
   document.getElementById('footer-period').textContent =
     now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-  // Run both fetches in parallel, update proj filter when both complete
+  // Restore any persisted timer state before loading entries
+  restoreTimerState();
   Promise.all([loadEntries(), fetchNotionProjects()]).then(() => updateProjFilter());
 }
 
@@ -995,7 +1018,6 @@ async function loadEntries() {
   try {
     await fetchAllEntries();
     updateStats();
-    // updateProjFilter called after fetchNotionProjects completes in showApp
     updateProjFilter();
     renderTable();
     notify('Loaded ' + entries.length + ' entries', 'success');
@@ -1135,7 +1157,7 @@ function openAdd() {
   document.getElementById('m-status').value = '';
   document.getElementById('m-label').value = '';
   document.getElementById('save-btn').textContent = 'Save entry';
-  resetTimer();
+  syncTimerUIToState();
   document.getElementById('entry-modal').classList.add('open');
   setTimeout(() => document.getElementById('m-project').focus(), 50);
 }
@@ -1154,23 +1176,27 @@ function openEdit(pageId) {
   document.getElementById('m-status').value = e.status || '';
   document.getElementById('m-label').value = e.label || '';
   document.getElementById('save-btn').textContent = 'Save changes';
-  // If timer is running for this entry, show it running in the modal
-  // If timer is running for a DIFFERENT entry, reset it first
   if (timerRunning && activeTimerPageId !== pageId) {
     if (!confirm('A timer is running for a different entry. Stop it and open this one?')) return;
     resetTimer();
   }
-  // Don't reset timer if it's running for this entry - let it keep going
-  if (!timerRunning) {
-    timerSeconds = 0;
-    document.getElementById('timer-display').textContent = '00:00:00';
-    document.getElementById('timer-reset-btn').style.display = 'none';
-    document.getElementById('timer-use-btn').classList.remove('visible');
-    document.getElementById('timer-start-btn').style.display = 'inline-block';
-    document.getElementById('timer-stop-btn').style.display = 'none';
-    document.getElementById('timer-display').classList.remove('running');
-  }
+  syncTimerUIToState();
   document.getElementById('entry-modal').classList.add('open');
+}
+
+// Reopen modal for the currently running timer (from header pill click)
+function reopenTimerModal() {
+  if (!timerRunning) return;
+  // If we have an activeTimerPageId, open in edit mode; else open add mode
+  if (activeTimerPageId) {
+    openEdit(activeTimerPageId);
+  } else {
+    editingPageId = null;
+    document.getElementById('modal-title').textContent = 'Log time';
+    document.getElementById('save-btn').textContent = 'Save entry';
+    syncTimerUIToState();
+    document.getElementById('entry-modal').classList.add('open');
+  }
 }
 
 async function saveEntry() {
@@ -1189,7 +1215,6 @@ async function saveEntry() {
   if ((!hours || hours <= 0) && !timerHasTime) {
     notify('Please enter hours, or start the timer first.', 'error'); return;
   }
-  // If no hours entered but timer has meaningful time (>= 30 seconds), auto-apply
   let finalHours = hours > 0 ? hours : 0;
   if (finalHours === 0 && timerSeconds >= 30) {
     finalHours = Math.max(0.25, Math.round((timerSeconds / 3600) * 100) / 100);
@@ -1210,10 +1235,10 @@ async function saveEntry() {
     } else {
       const page = await createEntry(entry);
       entries.unshift({ notionPageId: page.id, ...entry });
-      // If timer is still running, link it to the newly created entry
       if (timerRunning) {
         activeTimerPageId = page.id;
-        renderTable(); // show timer indicator on the new row
+        persistTimerState();
+        renderTable();
       }
       notify('Entry saved to Notion', 'success');
     }
@@ -1302,7 +1327,6 @@ function buildExportHTML(rows, from, to, projFilter) {
 
   const rows_html = rows.map(e => `
     <tr>
-      <td class="timer-indicator-cell" style="width:80px;padding-right:0;">${e.notionPageId === activeTimerPageId && timerRunning ? `<span class="timer-live-badge"><span class="timer-pulse"></span>${formatTimerDisplay(timerSeconds)}</span>` : ''}</td>
       <td class="td-date">${fmtDate(e.date)}</td>
       <td class="td-project">${esc(e.project)||'—'}</td>
       <td><span class="tag" style="background:${TASK_BG_HEX[e.tasktype]||'#f0f0f0'};color:${TASK_COLORS_HEX[e.tasktype]||'#444'}">${e.tasktype}</span></td>
@@ -1345,10 +1369,7 @@ function buildExportHTML(rows, from, to, projFilter) {
     --accent: #c4602a;
   }
 
-  @page {
-    margin: 20mm 18mm;
-    size: A4;
-  }
+  @page { margin: 20mm 18mm; size: A4; }
 
   body {
     font-family: 'DM Mono', monospace;
@@ -1362,212 +1383,57 @@ function buildExportHTML(rows, from, to, projFilter) {
   }
 
   .print-btn {
-    position: fixed;
-    top: 1.5rem;
-    right: 1.5rem;
-    background: var(--ink);
-    color: var(--paper);
-    border: none;
-    padding: 10px 22px;
-    border-radius: 6px;
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    letter-spacing: 0.3px;
-    box-shadow: 0 2px 8px rgba(26,24,20,0.2);
-    transition: background 0.15s;
+    position: fixed; top: 1.5rem; right: 1.5rem;
+    background: var(--ink); color: var(--paper);
+    border: none; padding: 10px 22px; border-radius: 6px;
+    font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500;
+    cursor: pointer; letter-spacing: 0.3px;
+    box-shadow: 0 2px 8px rgba(26,24,20,0.2); transition: background 0.15s;
   }
   .print-btn:hover { background: #3d3a35; }
+  @media print { .print-btn { display: none; } body { padding: 0; background: white; } }
 
-  @media print {
-    .print-btn { display: none; }
-    body { padding: 0; background: white; }
-  }
-
-  /* Header */
-  .doc-header {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    padding-bottom: 1.5rem;
-    margin-bottom: 2rem;
-    border-bottom: 2px solid var(--ink);
-  }
-
-  .doc-logo {
-    font-family: 'Fraunces', serif;
-    font-size: 36px;
-    font-weight: 300;
-    color: var(--ink);
-    letter-spacing: -1px;
-    line-height: 1;
-  }
-
+  .doc-header { display: flex; align-items: flex-end; justify-content: space-between; padding-bottom: 1.5rem; margin-bottom: 2rem; border-bottom: 2px solid var(--ink); }
+  .doc-logo { font-family: 'Fraunces', serif; font-size: 36px; font-weight: 300; color: var(--ink); letter-spacing: -1px; line-height: 1; }
   .doc-logo span { color: var(--accent); }
+  .doc-meta { text-align: right; }
+  .doc-period { font-size: 13px; font-weight: 500; color: var(--ink); margin-bottom: 3px; }
+  .doc-sub { font-size: 11px; color: var(--ink3); }
 
-  .doc-meta {
-    text-align: right;
-  }
-
-  .doc-period {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--ink);
-    margin-bottom: 3px;
-  }
-
-  .doc-sub {
-    font-size: 11px;
-    color: var(--ink3);
-  }
-
-  /* Summary cards */
-  .summary-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-bottom: 2.5rem;
-  }
-
-  .summary-card {
-    background: var(--paper2);
-    border-radius: 8px;
-    padding: 1rem 1.25rem;
-    border: 1px solid var(--paper3);
-  }
-
-  .summary-card.accent {
-    background: var(--ink);
-    border-color: var(--ink);
-  }
-
-  .sc-label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--ink3);
-    margin-bottom: 6px;
-  }
-
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 2.5rem; }
+  .summary-card { background: var(--paper2); border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid var(--paper3); }
+  .summary-card.accent { background: var(--ink); border-color: var(--ink); }
+  .sc-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink3); margin-bottom: 6px; }
   .summary-card.accent .sc-label { color: rgba(245,242,237,0.5); }
-
-  .sc-val {
-    font-family: 'Fraunces', serif;
-    font-size: 28px;
-    font-weight: 300;
-    color: var(--ink);
-    letter-spacing: -0.5px;
-    line-height: 1;
-  }
-
+  .sc-val { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 300; color: var(--ink); letter-spacing: -0.5px; line-height: 1; }
   .summary-card.accent .sc-val { color: #faf8f5; }
 
-  /* Section headings */
-  .section-head {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--ink3);
-    font-weight: 500;
-    margin-bottom: 10px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--paper3);
-  }
+  .section-head { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink3); font-weight: 500; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--paper3); }
 
-  /* Project summary table */
-  .proj-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 2.5rem;
-  }
-
-  .proj-table td {
-    padding: 7px 10px;
-    border-bottom: 1px solid var(--paper3);
-    font-size: 12px;
-  }
-
+  .proj-table { width: 100%; border-collapse: collapse; margin-bottom: 2.5rem; }
+  .proj-table td { padding: 7px 10px; border-bottom: 1px solid var(--paper3); font-size: 12px; }
   .proj-table tr:last-child td { border-bottom: none; }
 
-  /* Main entries table */
-  .entries-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 2rem;
-    page-break-inside: auto;
-  }
-
-  .entries-table thead th {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--ink3);
-    font-weight: 500;
-    padding: 8px 10px;
-    text-align: left;
-    background: var(--paper2);
-    border-bottom: 1px solid var(--paper3);
-    border-top: 1px solid var(--paper3);
-  }
-
-  .entries-table tbody tr {
-    page-break-inside: avoid;
-    border-bottom: 1px solid var(--paper3);
-  }
-
-  .entries-table tbody td {
-    padding: 9px 10px;
-    vertical-align: middle;
-  }
+  .entries-table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; page-break-inside: auto; }
+  .entries-table thead th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink3); font-weight: 500; padding: 8px 10px; text-align: left; background: var(--paper2); border-bottom: 1px solid var(--paper3); border-top: 1px solid var(--paper3); }
+  .entries-table tbody tr { page-break-inside: avoid; border-bottom: 1px solid var(--paper3); }
+  .entries-table tbody td { padding: 9px 10px; vertical-align: middle; }
 
   .td-date { color: var(--ink3); white-space: nowrap; font-size: 11px; }
   .td-project { font-weight: 500; font-size: 12px; }
   .td-hours { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 300; color: var(--ink2); white-space: nowrap; }
   .td-notes { color: var(--ink3); font-size: 11px; max-width: 200px; }
 
-  .tag {
-    display: inline-block;
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 20px;
-    font-weight: 500;
-    letter-spacing: 0.2px;
-    white-space: nowrap;
-  }
+  .tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; letter-spacing: 0.2px; white-space: nowrap; }
 
-  /* Total row */
-  .total-row td {
-    padding: 10px 10px;
-    font-weight: 500;
-    background: var(--paper2);
-    border-top: 2px solid var(--ink);
-    font-size: 12px;
-  }
+  .total-row td { padding: 10px 10px; font-weight: 500; background: var(--paper2); border-top: 2px solid var(--ink); font-size: 12px; }
+  .total-hours { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 400; color: var(--accent); }
 
-  .total-hours {
-    font-family: 'Fraunces', serif;
-    font-size: 18px;
-    font-weight: 400;
-    color: var(--accent);
-  }
-
-  /* Footer */
-  .doc-footer {
-    margin-top: 3rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--paper3);
-    display: flex;
-    justify-content: space-between;
-    font-size: 10px;
-    color: var(--ink4);
-  }
+  .doc-footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--paper3); display: flex; justify-content: space-between; font-size: 10px; color: var(--ink4); }
 </style>
 </head>
 <body>
-
 <button class="print-btn" onclick="window.print()">Save as PDF ↓</button>
-
 <div class="doc-header">
   <div class="doc-logo">time<span>sheet</span></div>
   <div class="doc-meta">
@@ -1575,56 +1441,25 @@ function buildExportHTML(rows, from, to, projFilter) {
     <div class="doc-sub">${projLabel}</div>
   </div>
 </div>
-
 <div class="summary-grid">
-  <div class="summary-card accent">
-    <div class="sc-label">Total hours</div>
-    <div class="sc-val">${fmtHours(totalHours)}</div>
-  </div>
-  <div class="summary-card">
-    <div class="sc-label">Entries</div>
-    <div class="sc-val">${rows.length}</div>
-  </div>
-  <div class="summary-card">
-    <div class="sc-label">Projects</div>
-    <div class="sc-val">${projSummary.length}</div>
-  </div>
+  <div class="summary-card accent"><div class="sc-label">Total hours</div><div class="sc-val">${fmtHours(totalHours)}</div></div>
+  <div class="summary-card"><div class="sc-label">Entries</div><div class="sc-val">${rows.length}</div></div>
+  <div class="summary-card"><div class="sc-label">Projects</div><div class="sc-val">${projSummary.length}</div></div>
 </div>
-
-${projSummary.length > 1 ? `
-<div class="section-head">By project</div>
-<table class="proj-table">
-  <tbody>${proj_rows}</tbody>
-</table>` : ''}
-
+${projSummary.length > 1 ? `<div class="section-head">By project</div><table class="proj-table"><tbody>${proj_rows}</tbody></table>` : ''}
 <div class="section-head">All entries</div>
 <table class="entries-table">
-  <thead>
-    <tr>
-      <th>Date</th>
-      <th>Project</th>
-      <th>Task type</th>
-      <th>Hours</th>
-      <th>Notes</th>
-    </tr>
-  </thead>
+  <thead><tr><th>Date</th><th>Project</th><th>Task type</th><th>Hours</th><th>Notes</th></tr></thead>
   <tbody>
     ${rows_html}
-    <tr class="total-row">
-      <td colspan="3" style="text-align:right;color:var(--ink3);">Total</td>
-      <td class="total-hours">${fmtHours(totalHours)}</td>
-      <td></td>
-    </tr>
+    <tr class="total-row"><td colspan="3" style="text-align:right;color:var(--ink3);">Total</td><td class="total-hours">${fmtHours(totalHours)}</td><td></td></tr>
   </tbody>
 </table>
-
 <div class="doc-footer">
   <span>Generated ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</span>
   <span>timesheet</span>
 </div>
-
-</body>
-</html>`;
+</body></html>`;
 }
 
 function doExport(type) {
@@ -1715,11 +1550,8 @@ function clearFilters() {
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
-  if (id === 'entry-modal') {
-    // Only stop the timer if it's not tracking an active entry
-    // (i.e. don't kill a running timer just because user closed the modal)
-    if (!timerRunning) stopTimer();
-  }
+  // Closing the entry modal does NOT stop or reset the timer —
+  // it keeps running and stays visible in the header pill
 }
 
 let notifTimer;
@@ -1761,7 +1593,6 @@ async function openFromTasks() {
   document.getElementById('tasks-modal').classList.add('open');
 
   try {
-    // Fetch tasks and recent timesheet entries in parallel
     const [res, tsRes] = await Promise.all([
       notionRequest(`/databases/${TASKS_DB_ID}/query`, 'POST', {
         page_size: 50,
@@ -1773,7 +1604,6 @@ async function openFromTasks() {
       })
     ]);
 
-    // Build a set of already-logged task titles (from notes field)
     const loggedTitles = new Set(
       tsRes.results
         .map(p => p.properties?.Notes?.rich_text?.[0]?.plain_text || '')
@@ -1784,9 +1614,8 @@ async function openFromTasks() {
     const tasks = res.results.map(p => {
       const props = p.properties;
       const startStr = props['Start Time']?.date?.start;
-      const endStr = props['End Time']?.date?.start;
       const durationRaw = props['Duration (hrs)']?.formula?.number || 0;
-      const duration = Math.round(durationRaw * 4) / 4; // round to nearest 0.25
+      const duration = Math.round(durationRaw * 4) / 4;
       return {
         id: p.id,
         title: props['Task']?.title?.[0]?.plain_text || 'Untitled',
@@ -1802,13 +1631,11 @@ async function openFromTasks() {
       };
     });
 
-    // Resolve relation project names from Red Cat projects overview
     const allRelIds = [...new Set(tasks.flatMap(t => t.projectRelationIds || []))];
     const projectNames = {};
     await Promise.all(allRelIds.map(async id => {
       try {
         const page = await notionRequest(`/pages/${id}`);
-        // Try 'Project Name' first, then any title property
         const props = page.properties || {};
         const titleProp = Object.values(props).find(p => p.type === 'title');
         projectNames[id] = props['Project Name']?.title?.[0]?.plain_text
@@ -1830,12 +1657,9 @@ async function openFromTasks() {
       return;
     }
 
-    const TASK_COLORS_LOCAL = {Development:'tag-dev',Design:'tag-design',Meetings:'tag-meetings',Research:'tag-research',Admin:'tag-admin',Review:'tag-review',Testing:'tag-testing',Writing:'tag-writing',Other:'tag-other'};
-
     allTasks = tasks;
     taskMap = {};
     tasks.forEach(t => { taskMap[t.id] = t; });
-    // Populate label filter with unique labels from tasks
     const labelSel = document.getElementById('tasks-label-filter');
     const curLabel = labelSel.value;
     while (labelSel.options.length > 1) labelSel.remove(1);
@@ -1892,7 +1716,6 @@ function renderTasksList(tasks, loggedTitles) {
           <option value="In progress"${t.status === 'In progress' ? ' selected' : ''}>In progress</option>
           <option value="Done"${t.status === 'Done' ? ' selected' : ''}>Done</option>
         </select>
-
       </div>
       <button class="modal-btn${isLogged ? '' : ' primary'}" style="flex-shrink:0;font-size:12px;padding:6px 14px;" onclick="importTaskById('${t.id}')">${isLogged ? 'Load again' : 'Load'}</button>
     </div>`;
@@ -1911,7 +1734,6 @@ function importTask(task) {
   document.getElementById('m-date').value = task.date;
   document.getElementById('m-hours').value = task.duration;
   document.getElementById('m-project').value = task.project || '';
-  // Update datalist with task's project if not already present
   if (task.project) {
     const dl = document.getElementById('proj-list');
     const exists = Array.from(dl.options).some(o => o.value === task.project);
@@ -1928,7 +1750,9 @@ function importTask(task) {
   document.getElementById('m-status').value = task.status || '';
   document.getElementById('m-label').value = task.label || '';
   document.getElementById('save-btn').textContent = 'Save entry';
-  resetTimer();
+  // Don't reset the timer if one is already running
+  if (!timerRunning) resetTimer();
+  syncTimerUIToState();
   document.getElementById('entry-modal').classList.add('open');
 }
 
@@ -1937,7 +1761,59 @@ function importTask(task) {
 let timerInterval = null;
 let timerSeconds = 0;
 let timerRunning = false;
-let activeTimerPageId = null; // tracks which entry the timer is running for
+let activeTimerPageId = null;
+
+// Persist timer start timestamp to localStorage so it survives page refreshes
+function persistTimerState() {
+  if (timerRunning) {
+    localStorage.setItem('ts_timer_start', Date.now() - (timerSeconds * 1000));
+    localStorage.setItem('ts_timer_page_id', activeTimerPageId || '');
+  } else {
+    localStorage.removeItem('ts_timer_start');
+    localStorage.removeItem('ts_timer_page_id');
+  }
+}
+
+function restoreTimerState() {
+  const savedStart = localStorage.getItem('ts_timer_start');
+  if (!savedStart) return;
+  const elapsed = Math.floor((Date.now() - parseInt(savedStart)) / 1000);
+  if (elapsed <= 0) return;
+  timerSeconds = elapsed;
+  timerRunning = false; // will be set by startTimerInterval
+  activeTimerPageId = localStorage.getItem('ts_timer_page_id') || null;
+  // Resume the interval
+  startTimerInterval();
+  notify('Timer resumed — ' + formatTimerDisplay(timerSeconds) + ' elapsed', 'success');
+}
+
+function startTimerInterval() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerRunning = true;
+  timerInterval = setInterval(() => {
+    timerSeconds++;
+    const display = formatTimerDisplay(timerSeconds);
+    // Update modal display if open
+    const modalDisplay = document.getElementById('timer-display');
+    if (modalDisplay) {
+      modalDisplay.textContent = display;
+      modalDisplay.classList.add('running');
+    }
+    // Update header pill
+    const headerDisplay = document.getElementById('header-timer-display');
+    if (headerDisplay) headerDisplay.textContent = display;
+    // Update live badge in table row
+    if (activeTimerPageId) {
+      const row = document.querySelector(`#tbody tr[data-pageid="${activeTimerPageId}"]`);
+      if (row) {
+        row.classList.add('timer-running-row');
+        const cell = row.querySelector('.timer-indicator-cell');
+        if (cell) cell.innerHTML = `<span class="timer-live-badge"><span class="timer-pulse"></span>${display}</span>`;
+      }
+    }
+  }, 1000);
+  updateHeaderPill();
+}
 
 function formatTimerDisplay(secs) {
   const h = Math.floor(secs / 3600);
@@ -1946,36 +1822,63 @@ function formatTimerDisplay(secs) {
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
+function updateHeaderPill() {
+  const pill = document.getElementById('header-timer-pill');
+  const display = document.getElementById('header-timer-display');
+  if (!pill || !display) return;
+  if (timerRunning) {
+    display.textContent = formatTimerDisplay(timerSeconds);
+    pill.classList.add('visible');
+  } else {
+    pill.classList.remove('visible');
+  }
+}
+
+// Sync the modal timer UI buttons/display to match current timer state
+function syncTimerUIToState() {
+  const displayEl = document.getElementById('timer-display');
+  const startBtn = document.getElementById('timer-start-btn');
+  const stopBtn = document.getElementById('timer-stop-btn');
+  const resetBtn = document.getElementById('timer-reset-btn');
+  const useBtn = document.getElementById('timer-use-btn');
+  if (!displayEl) return;
+
+  displayEl.textContent = formatTimerDisplay(timerSeconds);
+
+  if (timerRunning) {
+    displayEl.classList.add('running');
+    startBtn.style.display = 'none';
+    stopBtn.style.display = 'inline-block';
+    resetBtn.style.display = 'none';
+    useBtn.classList.remove('visible');
+  } else if (timerSeconds > 0) {
+    displayEl.classList.remove('running');
+    startBtn.style.display = 'inline-block';
+    stopBtn.style.display = 'none';
+    resetBtn.style.display = 'inline-block';
+    useBtn.classList.add('visible');
+  } else {
+    displayEl.classList.remove('running');
+    startBtn.style.display = 'inline-block';
+    stopBtn.style.display = 'none';
+    resetBtn.style.display = 'none';
+    useBtn.classList.remove('visible');
+  }
+}
+
 function startTimer() {
   if (timerRunning) return;
-  timerRunning = true;
-  activeTimerPageId = editingPageId; // track which entry this timer belongs to
-  document.getElementById('timer-display').classList.add('running');
-  document.getElementById('timer-start-btn').style.display = 'none';
-  document.getElementById('timer-stop-btn').style.display = 'inline-block';
-  document.getElementById('timer-reset-btn').style.display = 'none';
-  document.getElementById('timer-use-btn').classList.remove('visible');
-  timerInterval = setInterval(() => {
-    timerSeconds++;
-    const display = formatTimerDisplay(timerSeconds);
-    document.getElementById('timer-display').textContent = display;
-    // Update the live timer cell in the main table row directly
-    if (activeTimerPageId) {
-      const row = document.querySelector(`#tbody tr[data-pageid="${activeTimerPageId}"]`);
-      if (row) {
-        row.classList.add('timer-running-row');
-        const timerCell = row.querySelector('.timer-indicator-cell');
-        if (timerCell) timerCell.innerHTML = `<span class="timer-live-badge"><span class="timer-pulse"></span>${display}</span>`;
-      }
-    }
-  }, 1000);
+  activeTimerPageId = editingPageId;
+  persistTimerState();
+  startTimerInterval();
+  syncTimerUIToState();
   // Show indicator immediately on the row
   if (activeTimerPageId) {
     const row = document.querySelector(`#tbody tr[data-pageid="${activeTimerPageId}"]`);
     if (row) {
       row.classList.add('timer-running-row');
-      const timerCell = row.querySelector('.timer-indicator-cell');
-      if (timerCell) timerCell.innerHTML = `<span class="timer-live-badge"><span class="timer-pulse"></span>00:00:00</span>`;
+      const cell = row.querySelector('.timer-indicator-cell');
+      if (cell) cell.innerHTML = `<span class="timer-live-badge"><span class="timer-pulse"></span>00:00:00</span>`;
     }
   }
 }
@@ -1984,18 +1887,18 @@ function stopTimer() {
   if (!timerRunning) return;
   timerRunning = false;
   clearInterval(timerInterval);
-  document.getElementById('timer-display').classList.remove('running');
-  document.getElementById('timer-stop-btn').style.display = 'none';
-  document.getElementById('timer-start-btn').style.display = 'inline-block';
-  document.getElementById('timer-reset-btn').style.display = 'inline-block';
-  if (timerSeconds > 0) document.getElementById('timer-use-btn').classList.add('visible');
-  // Clear the live indicator from the row
+  timerInterval = null;
+  localStorage.removeItem('ts_timer_start');
+  localStorage.removeItem('ts_timer_page_id');
+  syncTimerUIToState();
+  updateHeaderPill();
+  // Clear row indicator
   if (activeTimerPageId) {
     const row = document.querySelector(`#tbody tr[data-pageid="${activeTimerPageId}"]`);
     if (row) {
       row.classList.remove('timer-running-row');
-      const timerCell = row.querySelector('.timer-indicator-cell');
-      if (timerCell) timerCell.innerHTML = '';
+      const cell = row.querySelector('.timer-indicator-cell');
+      if (cell) cell.innerHTML = '';
     }
   }
 }
@@ -2004,15 +1907,13 @@ function resetTimer() {
   stopTimer();
   timerSeconds = 0;
   activeTimerPageId = null;
-  document.getElementById('timer-display').textContent = '00:00:00';
-  document.getElementById('timer-reset-btn').style.display = 'none';
-  document.getElementById('timer-use-btn').classList.remove('visible');
+  syncTimerUIToState();
+  updateHeaderPill();
   renderTable();
 }
 
 function useTimerTime() {
   if (timerSeconds === 0) { notify('Timer has not been started.', 'error'); return; }
-  // Round to 2 decimal places, minimum 0.25
   const rawHours = timerSeconds / 3600;
   const hours = Math.max(0.25, Math.round(rawHours * 100) / 100);
   const el = document.getElementById('m-hours');
@@ -2031,12 +1932,9 @@ async function updateTaskStatus(pageId, status, selectEl) {
   selectEl.style.opacity = '0.5';
   try {
     await notionRequest(`/pages/${pageId}`, 'PATCH', {
-      properties: {
-        Status: status
-      }
+      properties: { Status: status }
     });
     selectEl.dataset.original = status;
-    // Flash green border briefly
     selectEl.style.borderColor = '#3B6D11';
     setTimeout(() => { selectEl.style.borderColor = ''; }, 1000);
     notify('Status updated to ' + status, 'success');
