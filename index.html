@@ -1007,7 +1007,10 @@ function showApp() {
     now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   // Restore any persisted timer state before loading entries
   restoreTimerState();
-  Promise.all([loadEntries(), fetchNotionProjects()]).then(() => updateProjFilter());
+  Promise.all([loadEntries(), fetchNotionProjects()]).then(() => {
+    updateProjFilter();
+    checkForDraft();
+  });
 }
 
 // ── Load & render ─────────────────────────────────────────────────────────────
@@ -1158,6 +1161,7 @@ function openAdd() {
   document.getElementById('m-label').value = '';
   document.getElementById('save-btn').textContent = 'Save entry';
   syncTimerUIToState();
+  attachDraftListeners();
   document.getElementById('entry-modal').classList.add('open');
   setTimeout(() => document.getElementById('m-project').focus(), 50);
 }
@@ -1181,13 +1185,13 @@ function openEdit(pageId) {
     resetTimer();
   }
   syncTimerUIToState();
+  attachDraftListeners();
   document.getElementById('entry-modal').classList.add('open');
 }
 
 // Reopen modal for the currently running timer (from header pill click)
 function reopenTimerModal() {
   if (!timerRunning) return;
-  // If we have an activeTimerPageId, open in edit mode; else open add mode
   if (activeTimerPageId) {
     openEdit(activeTimerPageId);
   } else {
@@ -1195,6 +1199,7 @@ function reopenTimerModal() {
     document.getElementById('modal-title').textContent = 'Log time';
     document.getElementById('save-btn').textContent = 'Save entry';
     syncTimerUIToState();
+    attachDraftListeners();
     document.getElementById('entry-modal').classList.add('open');
   }
 }
@@ -1242,6 +1247,7 @@ async function saveEntry() {
       }
       notify('Entry saved to Notion', 'success');
     }
+    clearDraft();
     updateStats(); updateProjFilter(); renderTable();
     closeModal('entry-modal');
   } catch(e) {
@@ -1753,6 +1759,7 @@ function importTask(task) {
   // Don't reset the timer if one is already running
   if (!timerRunning) resetTimer();
   syncTimerUIToState();
+  attachDraftListeners();
   document.getElementById('entry-modal').classList.add('open');
 }
 
@@ -1762,6 +1769,113 @@ let timerInterval = null;
 let timerSeconds = 0;
 let timerRunning = false;
 let activeTimerPageId = null;
+
+// ── Draft auto-save ───────────────────────────────────────────────────────────
+function saveDraft() {
+  const project = document.getElementById('m-project')?.value.trim();
+  const notes = document.getElementById('m-notes')?.value.trim();
+  const hours = document.getElementById('m-hours')?.value;
+  // Only bother saving if there's something worth keeping
+  if (!project && !notes && !hours) return;
+
+  const draft = {
+    date: document.getElementById('m-date')?.value,
+    hours,
+    project,
+    tasktype: document.getElementById('m-task')?.value,
+    notes,
+    status: document.getElementById('m-status')?.value,
+    label: document.getElementById('m-label')?.value,
+    editingPageId,
+    savedAt: Date.now(),
+  };
+  localStorage.setItem('ts_draft', JSON.stringify(draft));
+}
+
+function clearDraft() {
+  localStorage.removeItem('ts_draft');
+}
+
+function checkForDraft() {
+  const raw = localStorage.getItem('ts_draft');
+  if (!raw) return;
+  let draft;
+  try { draft = JSON.parse(raw); } catch { clearDraft(); return; }
+
+  // Ignore drafts older than 48 hours
+  if (Date.now() - draft.savedAt > 48 * 60 * 60 * 1000) { clearDraft(); return; }
+
+  const mins = Math.round((Date.now() - draft.savedAt) / 60000);
+  const age = mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`;
+  const label = draft.project || 'unsaved entry';
+
+  const banner = document.createElement('div');
+  banner.id = 'draft-banner';
+  banner.style.cssText = `
+    position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:var(--paper);padding:12px 20px;
+    border-radius:var(--radius);font-size:12px;z-index:1000;
+    display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-lg);
+    white-space:nowrap;font-family:'DM Mono',monospace;
+  `;
+  banner.innerHTML = `
+    <span>Unsaved draft: <strong>${esc(label)}</strong> (${age})</span>
+    <button onclick="restoreDraft()" style="
+      padding:5px 12px;border-radius:var(--radius);border:1px solid rgba(245,242,237,0.3);
+      background:var(--accent);color:white;font-family:'DM Mono',monospace;
+      font-size:11px;cursor:pointer;font-weight:500;">Restore</button>
+    <button onclick="dismissDraft()" style="
+      padding:5px 10px;border-radius:var(--radius);border:1px solid rgba(245,242,237,0.2);
+      background:transparent;color:rgba(245,242,237,0.6);font-family:'DM Mono',monospace;
+      font-size:11px;cursor:pointer;">Discard</button>
+  `;
+  document.body.appendChild(banner);
+}
+
+function restoreDraft() {
+  const raw = localStorage.getItem('ts_draft');
+  if (!raw) return;
+  let draft;
+  try { draft = JSON.parse(raw); } catch { return; }
+
+  dismissDraft();
+  editingPageId = draft.editingPageId || null;
+  document.getElementById('modal-title').textContent = editingPageId ? 'Edit entry' : 'Log time';
+  document.getElementById('m-date').value = draft.date || today();
+  document.getElementById('m-hours').value = draft.hours || '';
+  document.getElementById('m-project').value = draft.project || '';
+  const taskEl = document.getElementById('m-task');
+  taskEl.value = draft.tasktype || 'Development';
+  if (!taskEl.value) taskEl.value = 'Development';
+  document.getElementById('m-notes').value = draft.notes || '';
+  document.getElementById('m-status').value = draft.status || '';
+  document.getElementById('m-label').value = draft.label || '';
+  document.getElementById('save-btn').textContent = editingPageId ? 'Save changes' : 'Save entry';
+  syncTimerUIToState();
+  attachDraftListeners();
+  document.getElementById('entry-modal').classList.add('open');
+  notify('Draft restored', 'success');
+}
+
+function dismissDraft() {
+  clearDraft();
+  const banner = document.getElementById('draft-banner');
+  if (banner) banner.remove();
+}
+
+function attachDraftListeners() {
+  const fields = ['m-date','m-hours','m-project','m-task','m-notes','m-status','m-label'];
+  fields.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      // Remove before re-adding to avoid duplicates
+      el.removeEventListener('input', saveDraft);
+      el.removeEventListener('change', saveDraft);
+      el.addEventListener('input', saveDraft);
+      el.addEventListener('change', saveDraft);
+    }
+  });
+}
 
 // Persist timer start timestamp to localStorage so it survives page refreshes
 function persistTimerState() {
@@ -1792,6 +1906,7 @@ function startTimerInterval() {
   timerRunning = true;
   timerInterval = setInterval(() => {
     timerSeconds++;
+    saveDraft(); // persist form state on every tick while timer runs
     const display = formatTimerDisplay(timerSeconds);
     // Update modal display if open
     const modalDisplay = document.getElementById('timer-display');
