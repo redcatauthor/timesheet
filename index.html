@@ -184,7 +184,6 @@
 
   .header-btn.primary:hover { background: var(--accent2); border-color: var(--accent2); }
 
-  /* Timer running indicator in header */
   .header-timer-pill {
     display: none;
     align-items: center;
@@ -355,7 +354,6 @@
   .row-actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s; }
   tbody tr:hover .row-actions { opacity: 1; }
   .timer-running-row td { background: #fff8f0 !important; }
-  @media (prefers-color-scheme: dark) { .timer-running-row td { background: rgba(196,96,43,0.08) !important; } }
   .timer-live-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--accent); }
   .timer-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; }
 
@@ -384,7 +382,6 @@
   .empty-state .big { font-family: 'Fraunces', serif; font-size: 48px; font-weight: 300; color: var(--paper3); margin-bottom: 1rem; }
   .empty-state p { font-size: 13px; }
 
-  /* Loading */
   .loading-row td {
     text-align: center;
     padding: 3rem;
@@ -473,10 +470,8 @@
   .modal-btn.primary:hover { background: var(--ink2); }
   .modal-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  /* Export modal */
   .export-options { display: flex; gap: 10px; margin-top: 1.5rem; justify-content: flex-end; }
 
-  /* Notification */
   #notif {
     position: fixed;
     bottom: 1.5rem;
@@ -580,6 +575,13 @@
   .timer-use-btn.visible { display: inline-block; }
   .timer-use-btn:hover { color: #faf8f5; border-color: rgba(245,242,237,0.4); }
 
+  /* Time fields hint */
+  .time-fields-hint {
+    font-size: 10px;
+    color: var(--ink4);
+    margin-top: 4px;
+    font-style: italic;
+  }
 </style>
 </head>
 <body>
@@ -617,7 +619,6 @@
       <span id="sync-indicator" style="font-size:11px;color:rgba(245,242,237,0.5);display:flex;align-items:center;">
         <span class="sync-dot" id="sync-dot"></span><span id="sync-text">Synced</span>
       </span>
-      <!-- Persistent timer pill — visible whenever timer is running, even with modal closed -->
       <div class="header-timer-pill" id="header-timer-pill" onclick="reopenTimerModal()" title="Timer running — click to open">
         <span class="header-timer-pill-dot"></span>
         <span id="header-timer-display">00:00:00</span>
@@ -732,6 +733,14 @@
       <div>
         <label class="form-label">Hours</label>
         <input type="number" class="form-input" id="m-hours" min="0.25" max="24" step="0.25" placeholder="e.g. 2.5">
+      </div>
+      <div>
+        <label class="form-label">Start time <span style="color:var(--ink4);font-size:10px;text-transform:none;letter-spacing:0;">(auto-filled by timer)</span></label>
+        <input type="time" class="form-input" id="m-start-time">
+      </div>
+      <div>
+        <label class="form-label">End time <span style="color:var(--ink4);font-size:10px;text-transform:none;letter-spacing:0;">(auto-filled by timer)</span></label>
+        <input type="time" class="form-input" id="m-end-time">
       </div>
       <div>
         <label class="form-label">Project</label>
@@ -945,6 +954,8 @@ function pageToEntry(page) {
       hours: p.Hours?.number || 0,
       notes: p.Notes?.rich_text?.[0]?.plain_text || '',
       title: p.Entry?.title?.[0]?.plain_text || '',
+      startTime: p['Start Time']?.rich_text?.[0]?.plain_text || '',
+      endTime: p['End Time']?.rich_text?.[0]?.plain_text || '',
     };
   } catch { return null; }
 }
@@ -960,6 +971,8 @@ function entryToNotionProps(entry) {
     ...(entry.label ? { Label: { select: { name: entry.label } } } : {}),
     Hours: { number: entry.hours },
     Notes: { rich_text: entry.notes ? [{ text: { content: entry.notes } }] : [] },
+    'Start Time': { rich_text: entry.startTime ? [{ text: { content: entry.startTime } }] : [] },
+    'End Time': { rich_text: entry.endTime ? [{ text: { content: entry.endTime } }] : [] },
   };
 }
 
@@ -1005,7 +1018,6 @@ function showApp() {
   const now = new Date();
   document.getElementById('footer-period').textContent =
     now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-  // Restore any persisted timer state before loading entries
   restoreTimerState();
   Promise.all([loadEntries(), fetchNotionProjects()]).then(() => {
     updateProjFilter();
@@ -1016,7 +1028,7 @@ function showApp() {
 // ── Load & render ─────────────────────────────────────────────────────────────
 async function loadEntries() {
   const tbody = document.getElementById('tbody');
-  tbody.innerHTML = `<tr class="loading-row"><td colspan="6">Loading from Notion...</td></tr>`;
+  tbody.innerHTML = `<tr class="loading-row"><td colspan="9">Loading from Notion...</td></tr>`;
   document.getElementById('empty-state').style.display = 'none';
   try {
     await fetchAllEntries();
@@ -1148,6 +1160,19 @@ function updateProjFilter() {
   projs.forEach(p => { const o = document.createElement('option'); o.value=p; dl.appendChild(o); });
 }
 
+// ── Time helpers ──────────────────────────────────────────────────────────────
+// Returns current local time as "HH:MM"
+function nowTimeStr() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+// Format a stored "HH:MM" time for display (e.g. "09:30")
+function fmtTime(t) {
+  if (!t) return '';
+  return t; // already HH:MM
+}
+
 // ── Add / Edit / Delete ───────────────────────────────────────────────────────
 function openAdd() {
   editingPageId = null;
@@ -1159,6 +1184,8 @@ function openAdd() {
   document.getElementById('m-notes').value = '';
   document.getElementById('m-status').value = '';
   document.getElementById('m-label').value = '';
+  document.getElementById('m-start-time').value = '';
+  document.getElementById('m-end-time').value = '';
   document.getElementById('save-btn').textContent = 'Save entry';
   syncTimerUIToState();
   attachDraftListeners();
@@ -1179,6 +1206,8 @@ function openEdit(pageId) {
   document.getElementById('m-notes').value = e.notes || '';
   document.getElementById('m-status').value = e.status || '';
   document.getElementById('m-label').value = e.label || '';
+  document.getElementById('m-start-time').value = e.startTime || '';
+  document.getElementById('m-end-time').value = e.endTime || '';
   document.getElementById('save-btn').textContent = 'Save changes';
   if (timerRunning && activeTimerPageId !== pageId) {
     if (!confirm('A timer is running for a different entry. Stop it and open this one?')) return;
@@ -1189,7 +1218,6 @@ function openEdit(pageId) {
   document.getElementById('entry-modal').classList.add('open');
 }
 
-// Reopen modal for the currently running timer (from header pill click)
 function reopenTimerModal() {
   if (!timerRunning) return;
   if (activeTimerPageId) {
@@ -1212,6 +1240,8 @@ async function saveEntry() {
   const notes = document.getElementById('m-notes').value.trim();
   const status = document.getElementById('m-status').value;
   const label = document.getElementById('m-label').value;
+  const startTime = document.getElementById('m-start-time').value;
+  const endTime = document.getElementById('m-end-time').value;
 
   const timerHasTime = timerSeconds > 0 || timerRunning;
   if (!date || !project) {
@@ -1231,7 +1261,7 @@ async function saveEntry() {
   setSyncing(true);
 
   try {
-    const entry = { date, hours: finalHours, project, tasktype, notes, status, label };
+    const entry = { date, hours: finalHours, project, tasktype, notes, status, label, startTime, endTime };
     if (editingPageId) {
       await updateEntry(editingPageId, entry);
       const idx = entries.findIndex(e => e.notionPageId === editingPageId);
@@ -1307,7 +1337,6 @@ function getExportRows() {
   }).sort((a,b) => a.date.localeCompare(b.date));
 }
 
-
 function buildExportHTML(rows, from, to, projFilter) {
   const totalHours = rows.reduce((a,e) => a+e.hours, 0);
   const byProject = {};
@@ -1320,22 +1349,11 @@ function buildExportHTML(rows, from, to, projFilter) {
     return new Date(y,m-1,d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
   };
 
-  const TASK_COLORS_HEX = {
-    Development:'#1a4a7a', Design:'#4a2a7a', Meetings:'#7a5a10',
-    Research:'#1a5a3a', Admin:'#4a4a4a', Review:'#3a5a10',
-    Testing:'#1a4a7a', Writing:'#4a2a7a', Other:'#4a4a4a'
-  };
-  const TASK_BG_HEX = {
-    Development:'#e6f0f8', Design:'#f0ebf8', Meetings:'#f5edda',
-    Research:'#e8f4ee', Admin:'#f0f0f0', Review:'#f0f5e8',
-    Testing:'#e6f0f8', Writing:'#f0ebf8', Other:'#f0f0f0'
-  };
-
   const rows_html = rows.map(e => `
     <tr>
       <td class="td-date">${fmtDate(e.date)}</td>
-      <td class="td-project">${esc(e.project)||'—'}</td>
-      <td><span class="tag" style="background:${TASK_BG_HEX[e.tasktype]||'#f0f0f0'};color:${TASK_COLORS_HEX[e.tasktype]||'#444'}">${e.tasktype}</span></td>
+      <td class="td-time">${e.startTime ? e.startTime : '—'}</td>
+      <td class="td-time">${e.endTime ? e.endTime : '—'}</td>
       <td class="td-hours">${fmtHours(e.hours)}</td>
       <td class="td-notes">${esc(e.notes||'')}</td>
     </tr>`).join('');
@@ -1384,7 +1402,7 @@ function buildExportHTML(rows, from, to, projFilter) {
     font-size: 12px;
     line-height: 1.6;
     padding: 3rem 4rem;
-    max-width: 900px;
+    max-width: 960px;
     margin: 0 auto;
   }
 
@@ -1428,7 +1446,8 @@ function buildExportHTML(rows, from, to, projFilter) {
   .td-date { color: var(--ink3); white-space: nowrap; font-size: 11px; }
   .td-project { font-weight: 500; font-size: 12px; }
   .td-hours { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 300; color: var(--ink2); white-space: nowrap; }
-  .td-notes { color: var(--ink3); font-size: 11px; max-width: 200px; }
+  .td-notes { color: var(--ink3); font-size: 11px; max-width: 180px; }
+  .td-time { color: var(--ink3); font-size: 11px; white-space: nowrap; }
 
   .tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; letter-spacing: 0.2px; white-space: nowrap; }
 
@@ -1455,7 +1474,7 @@ function buildExportHTML(rows, from, to, projFilter) {
 ${projSummary.length > 1 ? `<div class="section-head">By project</div><table class="proj-table"><tbody>${proj_rows}</tbody></table>` : ''}
 <div class="section-head">All entries</div>
 <table class="entries-table">
-  <thead><tr><th>Date</th><th>Project</th><th>Task type</th><th>Hours</th><th>Notes</th></tr></thead>
+  <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Hours</th><th>Notes</th></tr></thead>
   <tbody>
     ${rows_html}
     <tr class="total-row"><td colspan="3" style="text-align:right;color:var(--ink3);">Total</td><td class="total-hours">${fmtHours(totalHours)}</td><td></td></tr>
@@ -1486,21 +1505,21 @@ function doExport(type) {
 
   if (type === 'csv') {
     const lines = [
-      ['Date','Project','Task Type','Hours','Notes'].join(','),
-      ...rows.map(e => [e.date, `"${e.project}"`, e.tasktype, e.hours, `"${(e.notes||'').replace(/"/g,'""')}"`].join(','))
+      ['Date','Project','Task Type','Start Time','End Time','Hours','Notes'].join(','),
+      ...rows.map(e => [e.date, `"${e.project}"`, e.tasktype, e.startTime||'', e.endTime||'', e.hours, `"${(e.notes||'').replace(/"/g,'""')}"`].join(','))
     ];
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([lines.join('\n')], {type:'text/csv'}));
     a.download = filename + '.csv'; a.click();
   } else {
     const data = [
-      ['Date','Project','Task Type','Hours','Notes'],
-      ...rows.map(e => [e.date, e.project, e.tasktype, e.hours, e.notes||'']),
+      ['Date','Project','Task Type','Start Time','End Time','Hours','Notes'],
+      ...rows.map(e => [e.date, e.project, e.tasktype, e.startTime||'', e.endTime||'', e.hours, e.notes||'']),
       [],
-      ['','','Total hours', Math.round(rows.reduce((a,e)=>a+e.hours,0)*100)/100, '']
+      ['','','','','Total hours', Math.round(rows.reduce((a,e)=>a+e.hours,0)*100)/100, '']
     ];
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{wch:12},{wch:28},{wch:14},{wch:8},{wch:42}];
+    ws['!cols'] = [{wch:12},{wch:28},{wch:14},{wch:10},{wch:10},{wch:8},{wch:42}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
     XLSX.writeFile(wb, filename + '.xlsx');
@@ -1556,8 +1575,6 @@ function clearFilters() {
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
-  // Closing the entry modal does NOT stop or reset the timer —
-  // it keeps running and stays visible in the header pill
 }
 
 let notifTimer;
@@ -1577,7 +1594,6 @@ function setSyncing(on, err = false) {
   txt.textContent = on ? 'Syncing...' : 'Synced';
 }
 
-// Modal close on backdrop click
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
 });
@@ -1755,8 +1771,10 @@ function importTask(task) {
   document.getElementById('m-notes').value = task.title + (task.notes ? ' — ' + task.notes : '');
   document.getElementById('m-status').value = task.status || '';
   document.getElementById('m-label').value = task.label || '';
+  // Clear time fields when importing a task — they'll be filled by timer
+  document.getElementById('m-start-time').value = '';
+  document.getElementById('m-end-time').value = '';
   document.getElementById('save-btn').textContent = 'Save entry';
-  // Don't reset the timer if one is already running
   if (!timerRunning) resetTimer();
   syncTimerUIToState();
   attachDraftListeners();
@@ -1769,13 +1787,13 @@ let timerInterval = null;
 let timerSeconds = 0;
 let timerRunning = false;
 let activeTimerPageId = null;
+let timerStartedAt = null; // wall-clock Date when timer was started
 
 // ── Draft auto-save ───────────────────────────────────────────────────────────
 function saveDraft() {
   const project = document.getElementById('m-project')?.value.trim();
   const notes = document.getElementById('m-notes')?.value.trim();
   const hours = document.getElementById('m-hours')?.value;
-  // Only bother saving if there's something worth keeping
   if (!project && !notes && !hours) return;
 
   const draft = {
@@ -1786,6 +1804,8 @@ function saveDraft() {
     notes,
     status: document.getElementById('m-status')?.value,
     label: document.getElementById('m-label')?.value,
+    startTime: document.getElementById('m-start-time')?.value,
+    endTime: document.getElementById('m-end-time')?.value,
     editingPageId,
     savedAt: Date.now(),
   };
@@ -1802,7 +1822,6 @@ function checkForDraft() {
   let draft;
   try { draft = JSON.parse(raw); } catch { clearDraft(); return; }
 
-  // Ignore drafts older than 48 hours
   if (Date.now() - draft.savedAt > 48 * 60 * 60 * 1000) { clearDraft(); return; }
 
   const mins = Math.round((Date.now() - draft.savedAt) / 60000);
@@ -1850,6 +1869,8 @@ function restoreDraft() {
   document.getElementById('m-notes').value = draft.notes || '';
   document.getElementById('m-status').value = draft.status || '';
   document.getElementById('m-label').value = draft.label || '';
+  document.getElementById('m-start-time').value = draft.startTime || '';
+  document.getElementById('m-end-time').value = draft.endTime || '';
   document.getElementById('save-btn').textContent = editingPageId ? 'Save changes' : 'Save entry';
   syncTimerUIToState();
   attachDraftListeners();
@@ -1864,11 +1885,10 @@ function dismissDraft() {
 }
 
 function attachDraftListeners() {
-  const fields = ['m-date','m-hours','m-project','m-task','m-notes','m-status','m-label'];
+  const fields = ['m-date','m-hours','m-project','m-task','m-notes','m-status','m-label','m-start-time','m-end-time'];
   fields.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      // Remove before re-adding to avoid duplicates
       el.removeEventListener('input', saveDraft);
       el.removeEventListener('change', saveDraft);
       el.addEventListener('input', saveDraft);
@@ -1877,14 +1897,15 @@ function attachDraftListeners() {
   });
 }
 
-// Persist timer start timestamp to localStorage so it survives page refreshes
 function persistTimerState() {
   if (timerRunning) {
     localStorage.setItem('ts_timer_start', Date.now() - (timerSeconds * 1000));
     localStorage.setItem('ts_timer_page_id', activeTimerPageId || '');
+    if (timerStartedAt) localStorage.setItem('ts_timer_started_at', timerStartedAt.toISOString());
   } else {
     localStorage.removeItem('ts_timer_start');
     localStorage.removeItem('ts_timer_page_id');
+    localStorage.removeItem('ts_timer_started_at');
   }
 }
 
@@ -1894,9 +1915,10 @@ function restoreTimerState() {
   const elapsed = Math.floor((Date.now() - parseInt(savedStart)) / 1000);
   if (elapsed <= 0) return;
   timerSeconds = elapsed;
-  timerRunning = false; // will be set by startTimerInterval
+  timerRunning = false;
   activeTimerPageId = localStorage.getItem('ts_timer_page_id') || null;
-  // Resume the interval
+  const savedStartedAt = localStorage.getItem('ts_timer_started_at');
+  timerStartedAt = savedStartedAt ? new Date(savedStartedAt) : new Date(Date.now() - elapsed * 1000);
   startTimerInterval();
   notify('Timer resumed — ' + formatTimerDisplay(timerSeconds) + ' elapsed', 'success');
 }
@@ -1906,18 +1928,15 @@ function startTimerInterval() {
   timerRunning = true;
   timerInterval = setInterval(() => {
     timerSeconds++;
-    saveDraft(); // persist form state on every tick while timer runs
+    saveDraft();
     const display = formatTimerDisplay(timerSeconds);
-    // Update modal display if open
     const modalDisplay = document.getElementById('timer-display');
     if (modalDisplay) {
       modalDisplay.textContent = display;
       modalDisplay.classList.add('running');
     }
-    // Update header pill
     const headerDisplay = document.getElementById('header-timer-display');
     if (headerDisplay) headerDisplay.textContent = display;
-    // Update live badge in table row
     if (activeTimerPageId) {
       const row = document.querySelector(`#tbody tr[data-pageid="${activeTimerPageId}"]`);
       if (row) {
@@ -1949,7 +1968,6 @@ function updateHeaderPill() {
   }
 }
 
-// Sync the modal timer UI buttons/display to match current timer state
 function syncTimerUIToState() {
   const displayEl = document.getElementById('timer-display');
   const startBtn = document.getElementById('timer-start-btn');
@@ -1983,11 +2001,16 @@ function syncTimerUIToState() {
 
 function startTimer() {
   if (timerRunning) return;
+  timerStartedAt = new Date();
+  // Auto-fill start time field with current time
+  const startTimeEl = document.getElementById('m-start-time');
+  if (startTimeEl && !startTimeEl.value) {
+    startTimeEl.value = nowTimeStr();
+  }
   activeTimerPageId = editingPageId;
   persistTimerState();
   startTimerInterval();
   syncTimerUIToState();
-  // Show indicator immediately on the row
   if (activeTimerPageId) {
     const row = document.querySelector(`#tbody tr[data-pageid="${activeTimerPageId}"]`);
     if (row) {
@@ -2003,11 +2026,16 @@ function stopTimer() {
   timerRunning = false;
   clearInterval(timerInterval);
   timerInterval = null;
+  // Auto-fill end time field with current time
+  const endTimeEl = document.getElementById('m-end-time');
+  if (endTimeEl && !endTimeEl.value) {
+    endTimeEl.value = nowTimeStr();
+  }
   localStorage.removeItem('ts_timer_start');
   localStorage.removeItem('ts_timer_page_id');
+  localStorage.removeItem('ts_timer_started_at');
   syncTimerUIToState();
   updateHeaderPill();
-  // Clear row indicator
   if (activeTimerPageId) {
     const row = document.querySelector(`#tbody tr[data-pageid="${activeTimerPageId}"]`);
     if (row) {
@@ -2021,7 +2049,13 @@ function stopTimer() {
 function resetTimer() {
   stopTimer();
   timerSeconds = 0;
+  timerStartedAt = null;
   activeTimerPageId = null;
+  // Clear time fields when timer is reset
+  const startTimeEl = document.getElementById('m-start-time');
+  const endTimeEl = document.getElementById('m-end-time');
+  if (startTimeEl) startTimeEl.value = '';
+  if (endTimeEl) endTimeEl.value = '';
   syncTimerUIToState();
   updateHeaderPill();
   renderTable();
