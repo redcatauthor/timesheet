@@ -1173,6 +1173,45 @@ function fmtTime(t) {
   return t; // already HH:MM
 }
 
+// Auto-calculate end time from start time + hours
+// Recalculate whichever time field can be derived from the other two.
+// Rules (only fills a field if it is currently empty):
+//   start + hours  → end
+//   end   + hours  → start
+//   start + end    → hours
+function recalcTimes() {
+  const startEl = document.getElementById('m-start-time');
+  const endEl   = document.getElementById('m-end-time');
+  const hoursEl = document.getElementById('m-hours');
+  if (!startEl || !endEl || !hoursEl) return;
+
+  const startVal = startEl.value;
+  const endVal   = endEl.value;
+  const hoursVal = parseFloat(hoursEl.value);
+
+  const toMins = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+  const toTimeStr = m => {
+    const h = Math.floor(m/60) % 24;
+    return String(h).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+  };
+
+  if (startVal && !isNaN(hoursVal) && hoursVal > 0 && !endVal) {
+    // start + hours → end
+    endEl.value = toTimeStr(toMins(startVal) + Math.round(hoursVal * 60));
+  } else if (endVal && !isNaN(hoursVal) && hoursVal > 0 && !startVal) {
+    // end + hours → start
+    const startMins = toMins(endVal) - Math.round(hoursVal * 60);
+    startEl.value = toTimeStr((startMins + 1440) % 1440); // wrap negative past midnight
+  } else if (startVal && endVal && (isNaN(hoursVal) || hoursEl.value === '')) {
+    // start + end → hours
+    let diffMins = toMins(endVal) - toMins(startVal);
+    if (diffMins < 0) diffMins += 1440; // crossed midnight
+    if (diffMins > 0) {
+      hoursEl.value = Math.round((diffMins / 60) * 100) / 100;
+    }
+  }
+}
+
 // ── Add / Edit / Delete ───────────────────────────────────────────────────────
 function openAdd() {
   editingPageId = null;
@@ -1558,8 +1597,10 @@ function fmtDate(s) {
   if (!s) return ''; const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`;
 }
 function fmtHours(h) {
-  const hrs = Math.floor(h), mins = Math.round((h-hrs)*60);
-  return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+  if (h === null || h === undefined || isNaN(h)) return "0:00";
+  const hrs = Math.floor(h);
+  const mins = Math.round((h - hrs) * 60);
+  return `${hrs}:${String(mins).padStart(2, "0")}`;
 }
 function esc(s) {
   if (!s) return '';
@@ -1893,6 +1934,14 @@ function attachDraftListeners() {
       el.removeEventListener('change', saveDraft);
       el.addEventListener('input', saveDraft);
       el.addEventListener('change', saveDraft);
+    }
+  });
+  // Recalculate missing time field when any time-related field changes
+  ['m-hours', 'm-start-time', 'm-end-time'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.removeEventListener('change', recalcTimes);
+      el.addEventListener('change', recalcTimes);
     }
   });
 }
