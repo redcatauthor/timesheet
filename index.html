@@ -691,6 +691,8 @@
           <th>Project</th>
           <th>Task type</th>
           <th>Hours</th>
+          <th>Start</th>
+          <th>End</th>
           <th>Notes</th>
           <th>Label</th>
           <th>Status</th>
@@ -1034,7 +1036,7 @@ function showApp() {
 // ── Load & render ─────────────────────────────────────────────────────────────
 async function loadEntries() {
   const tbody = document.getElementById('tbody');
-  tbody.innerHTML = `<tr class="loading-row"><td colspan="9">Loading from Notion...</td></tr>`;
+  tbody.innerHTML = `<tr class="loading-row"><td colspan="11">Loading from Notion...</td></tr>`;
   document.getElementById('empty-state').style.display = 'none';
   try {
     await fetchAllEntries();
@@ -1094,6 +1096,8 @@ function renderTable() {
       <td class="td-project">${esc(e.project) || '—'}</td>
       <td><span class="tag ${tag}">${e.tasktype}</span></td>
       <td class="td-hours">${fmtHours(e.hours)}</td>
+      <td class="td-date">${fmtTime(e.startTime) || ''}</td>
+      <td class="td-date">${fmtTime(e.endTime) || ''}</td>
       <td class="td-notes" title="${esc(e.notes)}">${esc(e.notes) || ''}</td>
       <td style="white-space:nowrap;">${e.label ? `<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;background:#FAEEDA;color:#633806;">${esc(e.label)}</span>` : ''}</td>
       <td style="white-space:nowrap;">${e.status ? `<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;background:${e.status==='Done'?'#EAF3DE':e.status==='In progress'?'#E6F1FB':'#f0f0f0'};color:${e.status==='Done'?'#27500A':e.status==='In progress'?'#0C447C':'#555'}">${e.status}</span>` : ''}</td>
