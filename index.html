@@ -1473,7 +1473,7 @@ function buildExportHTML(rows, from, to, projFilter) {
   .doc-period { font-size: 13px; font-weight: 500; color: var(--ink); margin-bottom: 3px; }
   .doc-sub { font-size: 11px; color: var(--ink3); }
 
-  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 2.5rem; page-break-inside: avoid; page-break-after: avoid; }
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 2.5rem; }
   .summary-card { background: var(--paper2); border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid var(--paper3); }
   .summary-card.accent { background: var(--ink); border-color: var(--ink); }
   .sc-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink3); margin-bottom: 6px; }
@@ -1481,7 +1481,7 @@ function buildExportHTML(rows, from, to, projFilter) {
   .sc-val { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 300; color: var(--ink); letter-spacing: -0.5px; line-height: 1; }
   .summary-card.accent .sc-val { color: #faf8f5; }
 
-  .section-head { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink3); font-weight: 500; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--paper3); page-break-after: avoid; }
+  .section-head { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink3); font-weight: 500; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--paper3); }
 
   .proj-table { width: 100%; border-collapse: collapse; margin-bottom: 2.5rem; }
   .proj-table td { padding: 7px 10px; border-bottom: 1px solid var(--paper3); font-size: 12px; }
@@ -1515,6 +1515,7 @@ function buildExportHTML(rows, from, to, projFilter) {
     <div class="doc-sub">${projLabel}</div>
   </div>
 </div>
+<div style="page-break-inside:avoid;">
 <div class="summary-grid">
   <div class="summary-card accent"><div class="sc-label">Total hours</div><div class="sc-val">${fmtHours(totalHours)}</div></div>
   <div class="summary-card"><div class="sc-label">Entries</div><div class="sc-val">${rows.length}</div></div>
@@ -1522,6 +1523,7 @@ function buildExportHTML(rows, from, to, projFilter) {
 </div>
 ${projSummary.length > 1 ? `<div class="section-head">By project</div><table class="proj-table"><tbody>${proj_rows}</tbody></table>` : ''}
 <div class="section-head">All entries</div>
+</div>
 <table class="entries-table">
   <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Hours</th><th>Notes</th></tr></thead>
   <tbody>
