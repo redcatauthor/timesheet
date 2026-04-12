@@ -1515,7 +1515,6 @@ function buildExportHTML(rows, from, to, projFilter) {
     <div class="doc-sub">${projLabel}</div>
   </div>
 </div>
-<div style="page-break-inside:avoid;">
 <div class="summary-grid">
   <div class="summary-card accent"><div class="sc-label">Total hours</div><div class="sc-val">${fmtHours(totalHours)}</div></div>
   <div class="summary-card"><div class="sc-label">Entries</div><div class="sc-val">${rows.length}</div></div>
@@ -1523,12 +1522,11 @@ function buildExportHTML(rows, from, to, projFilter) {
 </div>
 ${projSummary.length > 1 ? `<div class="section-head">By project</div><table class="proj-table"><tbody>${proj_rows}</tbody></table>` : ''}
 <div class="section-head">All entries</div>
-</div>
 <table class="entries-table">
   <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Hours</th><th>Notes</th></tr></thead>
   <tbody>
     ${rows_html}
-    <tr class="total-row"><td colspan="3" style="text-align:right;color:var(--ink3);">Total</td><td class="total-hours">${fmtHours(totalHours)}</td><td></td></tr>
+    <tr class="total-row"><td colspan="3" style="text-align:right;color:var(--ink2);">Total</td><td class="total-hours">${fmtHours(totalHours)}</td><td></td></tr>
   </tbody>
 </table>
 <div class="doc-footer">
