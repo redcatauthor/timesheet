@@ -1212,7 +1212,7 @@ function recalcTimes() {
     // end + hours → start
     const startMins = toMins(endVal) - Math.round(hoursVal * 60);
     startEl.value = toTimeStr((startMins + 1440) % 1440); // wrap negative past midnight
-  } else if (startVal && endVal && (isNaN(hoursVal) || hoursEl.value === '')) {
+  } else if (startVal && endVal && (isNaN(hoursVal) || hoursEl.value === '' || hoursVal === 0)) {
     // start + end → hours
     let diffMins = toMins(endVal) - toMins(startVal);
     if (diffMins < 0) diffMins += 1440; // crossed midnight
@@ -1473,7 +1473,7 @@ function buildExportHTML(rows, from, to, projFilter) {
   .doc-period { font-size: 13px; font-weight: 500; color: var(--ink); margin-bottom: 3px; }
   .doc-sub { font-size: 11px; color: var(--ink3); }
 
-  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 2.5rem; }
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 2.5rem; page-break-inside: avoid; page-break-after: avoid; }
   .summary-card { background: var(--paper2); border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid var(--paper3); }
   .summary-card.accent { background: var(--ink); border-color: var(--ink); }
   .sc-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink3); margin-bottom: 6px; }
@@ -1481,7 +1481,7 @@ function buildExportHTML(rows, from, to, projFilter) {
   .sc-val { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 300; color: var(--ink); letter-spacing: -0.5px; line-height: 1; }
   .summary-card.accent .sc-val { color: #faf8f5; }
 
-  .section-head { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink3); font-weight: 500; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--paper3); }
+  .section-head { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink3); font-weight: 500; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--paper3); page-break-after: avoid; }
 
   .proj-table { width: 100%; border-collapse: collapse; margin-bottom: 2.5rem; }
   .proj-table td { padding: 7px 10px; border-bottom: 1px solid var(--paper3); font-size: 12px; }
@@ -1501,7 +1501,7 @@ function buildExportHTML(rows, from, to, projFilter) {
   .tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; letter-spacing: 0.2px; white-space: nowrap; }
 
   .total-row td { padding: 10px 10px; font-weight: 500; background: var(--paper2); border-top: 2px solid var(--ink); font-size: 12px; }
-  .total-hours { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 400; color: var(--accent); }
+  .total-hours { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 500; color: var(--ink); }
 
   .doc-footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--paper3); display: flex; justify-content: space-between; font-size: 10px; color: var(--ink4); }
 </style>
