@@ -2524,7 +2524,8 @@ function renderReport() {
     const d = days[date];
     const startStr = minutesToTimeStr(d.startMins);
     const endStr = minutesToTimeStr(d.endMins);
-    const hoursStr = d.totalHours > 0 ? d.totalHours.toFixed(1) + 'h' : '';
+    const totalMins = Math.round(d.totalHours * 60);
+    const hoursStr = d.totalHours > 0 ? Math.floor(totalMins/60) + ':' + String(totalMins%60).padStart(2,'0') : '';
 
     const dayEl = document.createElement('div');
     dayEl.className = 'report-day';
