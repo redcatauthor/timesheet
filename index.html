@@ -629,6 +629,36 @@
   .report-task-notes {
     color: var(--ink3);
     line-height: 1.5;
+    flex: 1;
+  }
+
+  .report-notes-edit {
+    flex: 1;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--ink);
+    background: var(--paper2);
+    border: 1.5px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 3px 8px;
+    outline: none;
+    line-height: 1.5;
+    resize: none;
+    overflow: hidden;
+    min-height: 28px;
+  }
+
+  .report-task-notes:hover {
+    color: var(--ink);
+    cursor: text;
+    text-decoration: underline dotted var(--ink4);
+  }
+
+  .report-edit-hint {
+    font-size: 11px;
+    color: var(--ink4);
+    padding: 0.5rem 1.25rem 0.75rem;
+    font-style: italic;
   }
 
   .report-empty {
@@ -2433,6 +2463,41 @@ function buildReportDays(weekStart) {
   return days;
 }
 
+// Stores manual edits to report notes: { 'date::proj': 'edited text' }
+let reportEdits = {};
+
+function getReportNotes(date, proj, defaultText) {
+  const key = date + '::' + proj;
+  return key in reportEdits ? reportEdits[key] : defaultText;
+}
+
+function makeNoteEditable(el, date, proj) {
+  const key = date + '::' + proj;
+  const current = el.textContent;
+  const ta = document.createElement('textarea');
+  ta.className = 'report-notes-edit';
+  ta.value = current;
+  ta.rows = 1;
+  el.replaceWith(ta);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = ta.value.length;
+  // Auto-resize
+  const resize = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+  ta.addEventListener('input', resize);
+  resize();
+  const save = () => {
+    reportEdits[key] = ta.value.trim();
+    const span = document.createElement('span');
+    span.className = 'report-task-notes';
+    span.textContent = reportEdits[key] || '';
+    span.title = 'Click to edit';
+    span.addEventListener('click', () => makeNoteEditable(span, date, proj));
+    ta.replaceWith(span);
+  };
+  ta.addEventListener('blur', save);
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); } });
+}
+
 function renderReport() {
   const weekStart = document.getElementById('report-week-start').value;
   const body = document.getElementById('report-body');
@@ -2448,48 +2513,73 @@ function renderReport() {
     return;
   }
 
+  // Clear edits when week changes
+  reportEdits = {};
+
   const dates = Object.keys(days).sort();
   const totalDays = dates.length;
+  const container = document.createElement('div');
 
-  let html = '';
   for (const date of dates) {
     const d = days[date];
     const startStr = minutesToTimeStr(d.startMins);
     const endStr = minutesToTimeStr(d.endMins);
     const hoursStr = d.totalHours > 0 ? d.totalHours.toFixed(1) + 'h' : '';
 
-    html += `<div class="report-day">`;
-    html += `<div class="report-day-header">
+    const dayEl = document.createElement('div');
+    dayEl.className = 'report-day';
+
+    dayEl.innerHTML = `<div class="report-day-header">
       <span class="report-day-name">${formatReportDate(date)}</span>
       <span class="report-day-meta">
         <span class="report-day-time">${startStr} &ndash; ${endStr}</span>
         ${hoursStr ? `<span class="report-day-hours">${hoursStr}</span>` : ''}
       </span>
     </div>`;
-    html += `<div class="report-tasks">`;
+
+    const tasksEl = document.createElement('div');
+    tasksEl.className = 'report-tasks';
 
     const projects = Object.keys(d.projectNotes);
     if (projects.length) {
       for (const proj of projects) {
         const notesText = d.projectNotes[proj].join('; ');
-        html += `<div class="report-task-row">
-          <span class="report-task-project">${proj}</span>
-          ${notesText ? `<span class="report-task-notes">${notesText}</span>` : ''}
-        </div>`;
+        const row = document.createElement('div');
+        row.className = 'report-task-row';
+        const projSpan = document.createElement('span');
+        projSpan.className = 'report-task-project';
+        projSpan.textContent = proj;
+        row.appendChild(projSpan);
+        if (notesText) {
+          const notesSpan = document.createElement('span');
+          notesSpan.className = 'report-task-notes';
+          notesSpan.textContent = notesText;
+          notesSpan.title = 'Click to edit';
+          notesSpan.addEventListener('click', () => makeNoteEditable(notesSpan, date, proj));
+          row.appendChild(notesSpan);
+        }
+        tasksEl.appendChild(row);
       }
     } else {
-      html += `<div class="report-empty">No task details recorded</div>`;
+      tasksEl.innerHTML = '<div class="report-empty">No task details recorded</div>';
     }
 
-    html += `</div></div>`;
+    dayEl.appendChild(tasksEl);
+    container.appendChild(dayEl);
   }
 
-  html += `<div class="report-total-row">
-    <span>Days to invoice</span>
-    <span class="report-total-hours">${totalDays}</span>
-  </div>`;
+  const hint = document.createElement('div');
+  hint.className = 'report-edit-hint';
+  hint.textContent = 'Click any notes text to edit before exporting.';
+  container.appendChild(hint);
 
-  body.innerHTML = html;
+  const totalRow = document.createElement('div');
+  totalRow.className = 'report-total-row';
+  totalRow.innerHTML = `<span>Days to invoice</span><span class="report-total-hours">${totalDays}</span>`;
+  container.appendChild(totalRow);
+
+  body.innerHTML = '';
+  body.appendChild(container);
 }
 
 function exportReportHTML() {
@@ -2512,7 +2602,9 @@ function exportReportHTML() {
     const startStr = minutesToTimeStr(d.startMins);
     const endStr = minutesToTimeStr(d.endMins);
     const taskLines = Object.entries(d.projectNotes).map(([proj, notes]) => {
-      return `<div class="task-line"><span class="task-proj">${esc(proj)}</span>${notes.length ? `<span class="task-notes">${esc(notes.join('; '))}</span>` : ''}</div>`;
+      const key = date + '::' + proj;
+      const text = key in reportEdits ? reportEdits[key] : notes.join('; ');
+      return `<div class="task-line"><span class="task-proj">${esc(proj)}</span>${text ? `<span class="task-notes">${esc(text)}</span>` : ''}</div>`;
     }).join('');
     return `<tr>
       <td class="td-date">${fmtDate(date)}</td>
