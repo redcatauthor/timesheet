@@ -16,7 +16,6 @@
     --paper: #ffffff;
     --paper2: #f5f5f5;
     --paper3: #e5e5e5;
-    --paper4: #c0392b;
     --accent: #c0392b;
     --accent2: #e74c3c;
     --green: #3a7d5c;
@@ -631,19 +630,6 @@
     line-height: 1.5;
     flex: 1;
   }
-  
-.summary-card.accent {
-  background: var(--accent);
-  color: white;
-}
-
-.summary-card.accent .sc-label {
-  color: rgba(255,255,255,0.7);
-}
-
-.summary-card.accent .sc-val {
-  color: white;
-}
 
   .report-notes-edit {
     flex: 1;
@@ -686,20 +672,19 @@
     align-items: baseline;
     justify-content: space-between;
     padding: 0.75rem 1.25rem;
-    border-top: 1px solid var(--paper3);
-    background: var(--paper2);
+    border-top: none;
+    background: var(--accent);
     font-size: 12px;
-    color: var(--ink3);
+    color: rgba(245,242,237,0.7);
     margin-top: 0.25rem;
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    border-radius: var(--radius-lg);
   }
 
   .report-total-hours {
     font-family: 'Fraunces', serif;
     font-size: 18px;
     font-weight: 300;
-    background: var(--paper4);
-    color: var(--ink3);
+    color: #faf8f5;
   }
 
   .report-no-data {
@@ -1677,11 +1662,10 @@ function buildExportHTML(rows, from, to, projFilter) {
     --ink2: #3d3a35;
     --ink3: #7a756d;
     --ink4: #b0ab9f;
-    --ink5: #c0392b;
     --paper: #ffffff;
     --paper2: #f7f7f7;
     --paper3: #e5e5e5;
-    --accent: #c0392b;
+    --accent: #c4602a;
   }
 
   @page { margin: 20mm 18mm; size: A4; }
@@ -1717,7 +1701,7 @@ function buildExportHTML(rows, from, to, projFilter) {
 
   .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 2.5rem; }
   .summary-card { background: var(--paper2); border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid var(--paper3); }
-  .summary-card.accent { background: var(--ink); border-color: var(--ink); }
+  .summary-card.accent { background: #c0392b; border-color: #c0392b; }
   .sc-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink3); margin-bottom: 6px; }
   .summary-card.accent .sc-label { color: rgba(245,242,237,0.5); }
   .sc-val { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 300; color: var(--ink); letter-spacing: -0.5px; line-height: 1; }
@@ -2665,7 +2649,7 @@ function exportReportHTML() {
 
   .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:2.5rem; }
   .summary-card { background:var(--paper2); border-radius:var(--radius-lg); padding:1rem 1.25rem; border:1px solid var(--paper3); }
-  .summary-card.accent { background:var(--ink); border-color:var(--ink); }
+  .summary-card.accent { background:#c0392b; border-color:#c0392b; }
   .sc-label { font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--ink3); margin-bottom:6px; }
   .summary-card.accent .sc-label { color:rgba(245,242,237,0.5); }
   .sc-val { font-family:'Fraunces',serif; font-size:28px; font-weight:300; color:var(--ink); line-height:1; }
