@@ -785,6 +785,7 @@ async function fetchPersonalSchema() {
 }
 
 async function switchTab(tab) {
+  console.log('[tab] switching to', tab);
   currentTab = tab;
   document.getElementById('tab-redcat').classList.toggle('active', tab === 'redcat');
   document.getElementById('tab-personal').classList.toggle('active', tab === 'personal');
@@ -792,6 +793,7 @@ async function switchTab(tab) {
   document.getElementById('project-override-group').style.display = tab === 'redcat' ? '' : 'none';
   updateAddCardSub();
   if (tab === 'personal') await fetchPersonalSchema();
+  console.log('[tab] calling loadTasks, currentTab=', currentTab);
   loadTasks();
 }
 
@@ -991,6 +993,7 @@ function resolveProjectId() {
 async function loadTasks() {
   const isPersonal = currentTab === 'personal';
   const dbId = (isPersonal ? PERSONAL_DB : TASKS_DB).replace(/-/g,'');
+  console.log('[loadTasks] isPersonal=', isPersonal, 'dbId=', dbId);
   const s = isPersonal ? (personalSchema || await fetchPersonalSchema()) : null;
 
   allTasks = [];
