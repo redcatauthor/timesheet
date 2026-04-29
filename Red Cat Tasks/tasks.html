@@ -993,6 +993,8 @@ async function loadTasks() {
   const dbId = (isPersonal ? PERSONAL_DB : TASKS_DB).replace(/-/g,'');
   const s = isPersonal ? (personalSchema || await fetchPersonalSchema()) : null;
 
+  allTasks = [];
+  renderTasks();
   setSyncing(true);
   try {
     const filterType = isPersonal && s.statusType === 'status' ? 'status' : 'select';
@@ -1058,7 +1060,11 @@ async function loadTasks() {
     renderTasks();
   } catch(e) {
     setSyncing(false, true);
-    notify('Failed to load: ' + e.message, 'error');
+    if (isPersonal && (e.message.includes('404') || e.message.includes('not found') || e.message.toLowerCase().includes('unauthorized'))) {
+      notify('Personal Tasks: connect your Notion integration to that database first', 'error');
+    } else {
+      notify('Failed to load: ' + e.message, 'error');
+    }
   }
 }
 
