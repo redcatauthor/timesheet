@@ -747,14 +747,51 @@ let allTasks = [];
 let allProjects = [];      // [{ id, name }]
 let currentProjectId = ''; // '' = no project
 let currentTab = 'redcat';
+let personalSchema = null; // discovered from Notion DB schema
 
-function switchTab(tab) {
+async function fetchPersonalSchema() {
+  if (personalSchema) return personalSchema;
+  try {
+    const db = await notion(`/databases/${PERSONAL_DB.replace(/-/g,'')}`);
+    const props = db.properties || {};
+
+    const findKey = (types, names) => {
+      for (const n of names) {
+        const k = Object.keys(props).find(k => k.toLowerCase() === n.toLowerCase());
+        if (k && types.includes(props[k].type)) return k;
+      }
+      return Object.keys(props).find(k => types.includes(props[k].type)) || null;
+    };
+
+    const titleKey  = Object.keys(props).find(k => props[k].type === 'title') || 'Name';
+    const statusKey = findKey(['status','select'], ['status']);
+    const sType     = statusKey ? props[statusKey].type : 'select';
+
+    const optNames  = key => (props[key]?.[sType]?.options || []).map(o => o.name);
+    const doneVal   = optNames(statusKey).find(n => /^(done|complete[d]?|finished)$/i.test(n)) || 'Done';
+    const todoVal   = optNames(statusKey).find(n => /^(to.?do|not started|open|new|backlog)$/i.test(n)) || 'To do';
+
+    const priorityKey = findKey(['select'], ['priority']);
+    const dueKey      = findKey(['date'], ['due date','due','deadline']);
+    const allSelects  = Object.keys(props).filter(k => props[k].type === 'select' && k !== statusKey && k !== priorityKey);
+    const labelKey    = allSelects.find(k => /label|tag|category/i.test(k)) || null;
+    const typeKey     = allSelects.find(k => /type/i.test(k) && k !== labelKey) || null;
+
+    personalSchema = { title: titleKey, status: statusKey || 'Status', statusType: sType, doneValue: doneVal, todoValue: todoVal, priority: priorityKey, label: labelKey, tasktype: typeKey, due: dueKey };
+  } catch(e) {
+    personalSchema = { title: 'Task', status: 'Status', statusType: 'select', doneValue: 'Done', todoValue: 'To do', priority: 'Priority', label: 'Label', tasktype: 'Task Type', due: 'Due Date' };
+  }
+  return personalSchema;
+}
+
+async function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tab-redcat').classList.toggle('active', tab === 'redcat');
   document.getElementById('tab-personal').classList.toggle('active', tab === 'personal');
   document.getElementById('project-bar').style.display = tab === 'redcat' ? '' : 'none';
   document.getElementById('project-override-group').style.display = tab === 'redcat' ? '' : 'none';
   updateAddCardSub();
+  if (tab === 'personal') await fetchPersonalSchema();
   loadTasks();
 }
 
@@ -952,38 +989,58 @@ function resolveProjectId() {
 
 // ── Load tasks ────────────────────────────────────────────────────────────────
 async function loadTasks() {
-  const dbId = (currentTab === 'personal' ? PERSONAL_DB : TASKS_DB).replace(/-/g,'');
+  const isPersonal = currentTab === 'personal';
+  const dbId = (isPersonal ? PERSONAL_DB : TASKS_DB).replace(/-/g,'');
+  const s = isPersonal ? (personalSchema || await fetchPersonalSchema()) : null;
+
   setSyncing(true);
   try {
-    const res = await notion(`/databases/${dbId}/query`, 'POST', {
-      page_size: 100,
-      sorts: [{ property: 'Due Date', direction: 'ascending' }],
-      filter: {
-        property: 'Status',
-        select: { does_not_equal: 'Done' }
-      }
-    });
+    const filterType = isPersonal && s.statusType === 'status' ? 'status' : 'select';
+    const doneVal    = isPersonal ? s.doneValue : 'Done';
+    const statusProp = isPersonal ? s.status : 'Status';
+    const dueProp    = isPersonal ? s.due : 'Due Date';
 
-    // Resolve project relation names for display
-    const relIds = [...new Set(
-      res.results.flatMap(p => (p.properties?.Project?.relation || []).map(r => r.id))
-    )];
+    const query = {
+      page_size: 100,
+      filter: { property: statusProp, [filterType]: { does_not_equal: doneVal } },
+    };
+    if (dueProp) query.sorts = [{ property: dueProp, direction: 'ascending' }];
+
+    const res = await notion(`/databases/${dbId}/query`, 'POST', query);
+
+    // Resolve project relation names (Red Cat only)
     const projNames = {};
-    await Promise.all(relIds.map(async id => {
-      // Try cache from allProjects first
-      const cached = allProjects.find(p => p.id === id);
-      if (cached) { projNames[id] = cached.name; return; }
-      try {
-        const page = await notion(`/pages/${id}`);
-        const props = page.properties || {};
-        const titleProp = Object.values(props).find(p => p.type === 'title');
-        projNames[id] = props['Project Name']?.title?.[0]?.plain_text
-          || titleProp?.title?.[0]?.plain_text || '';
-      } catch(e) {}
-    }));
+    if (!isPersonal) {
+      const relIds = [...new Set(
+        res.results.flatMap(p => (p.properties?.Project?.relation || []).map(r => r.id))
+      )];
+      await Promise.all(relIds.map(async id => {
+        const cached = allProjects.find(p => p.id === id);
+        if (cached) { projNames[id] = cached.name; return; }
+        try {
+          const page = await notion(`/pages/${id}`);
+          const props = page.properties || {};
+          const titleProp = Object.values(props).find(p => p.type === 'title');
+          projNames[id] = props['Project Name']?.title?.[0]?.plain_text || titleProp?.title?.[0]?.plain_text || '';
+        } catch(e) {}
+      }));
+    }
 
     allTasks = res.results.map(p => {
       const pr = p.properties;
+      if (isPersonal) {
+        const stVal = s.statusType === 'status' ? pr[s.status]?.status?.name : pr[s.status]?.select?.name;
+        return {
+          id: p.id,
+          title: pr[s.title]?.title?.[0]?.plain_text || 'Untitled',
+          status: stVal || '',
+          priority: s.priority ? (pr[s.priority]?.select?.name || '') : '',
+          label:    s.label    ? (pr[s.label]?.select?.name || pr[s.label]?.multi_select?.[0]?.name || '') : '',
+          tasktype: s.tasktype ? (pr[s.tasktype]?.select?.name || '') : '',
+          due:      s.due      ? (pr[s.due]?.date?.start || '') : '',
+          project: '',
+        };
+      }
       const ids = (pr.Project?.relation || []).map(r => r.id);
       return {
         id: p.id,
@@ -1029,8 +1086,9 @@ function renderTasks() {
     return;
   }
 
+  const doneValue = (currentTab === 'personal' && personalSchema) ? personalSchema.doneValue : 'Done';
   el.innerHTML = filtered.map(t => {
-    const isDone = t.status === 'Done';
+    const isDone = t.status === doneValue;
     const dueStr = t.due ? fmtDue(t.due) : '';
     const overdue = t.due && new Date(t.due) < new Date() && !isDone;
     const prioTag = t.priority ? `<span class="tag ${PRIORITY_TAG[t.priority] || ''}">${t.priority}</span>` : '';
@@ -1078,16 +1136,32 @@ async function addTask() {
   btn.disabled = true;
   btn.textContent = 'Adding...';
 
-  const dbId = (currentTab === 'personal' ? PERSONAL_DB : TASKS_DB).replace(/-/g,'');
-  const props = {
-    Task:   { title: [{ text: { content: name } }] },
-    Status: { select: { name: 'To do' } },
-    ...(priority   ? { Priority:    { select: { name: priority } } }   : {}),
-    ...(label      ? { Label:       { select: { name: label } } }      : {}),
-    ...(tasktype   ? { 'Task Type': { select: { name: tasktype } } }   : {}),
-    ...(due        ? { 'Due Date':  { date: { start: due } } }         : {}),
-    ...(projectId && currentTab === 'redcat' ? { Project: { relation: [{ id: projectId }] } } : {}),
-  };
+  const isPersonal = currentTab === 'personal';
+  const dbId = (isPersonal ? PERSONAL_DB : TASKS_DB).replace(/-/g,'');
+  const s = isPersonal ? (personalSchema || await fetchPersonalSchema()) : null;
+
+  let props;
+  if (isPersonal) {
+    const statusVal = s.statusType === 'status' ? { status: { name: s.todoValue } } : { select: { name: s.todoValue } };
+    props = {
+      [s.title]:  { title: [{ text: { content: name } }] },
+      [s.status]: statusVal,
+      ...(priority && s.priority  ? { [s.priority]:  { select: { name: priority } } } : {}),
+      ...(label    && s.label     ? { [s.label]:     { select: { name: label } } }    : {}),
+      ...(tasktype && s.tasktype  ? { [s.tasktype]:  { select: { name: tasktype } } } : {}),
+      ...(due      && s.due       ? { [s.due]:       { date: { start: due } } }       : {}),
+    };
+  } else {
+    props = {
+      Task:   { title: [{ text: { content: name } }] },
+      Status: { select: { name: 'To do' } },
+      ...(priority  ? { Priority:    { select: { name: priority } } }  : {}),
+      ...(label     ? { Label:       { select: { name: label } } }     : {}),
+      ...(tasktype  ? { 'Task Type': { select: { name: tasktype } } }  : {}),
+      ...(due       ? { 'Due Date':  { date: { start: due } } }        : {}),
+      ...(projectId ? { Project:     { relation: [{ id: projectId }] } } : {}),
+    };
+  }
 
   try {
     await notion('/pages', 'POST', {
@@ -1132,16 +1206,23 @@ function showFeedback(msg, isError) {
 async function toggleDone(id, checkEl) {
   const task = allTasks.find(t => t.id === id);
   if (!task) return;
-  const isDone = task.status === 'Done';
-  const newStatus = isDone ? 'To do' : 'Done';
+
+  const isPersonal = currentTab === 'personal';
+  const s = isPersonal ? (personalSchema || await fetchPersonalSchema()) : null;
+  const doneVal = isPersonal ? s.doneValue : 'Done';
+  const todoVal = isPersonal ? s.todoValue : 'To do';
+
+  const isDone = task.status === doneVal;
+  const newStatus = isDone ? todoVal : doneVal;
   checkEl.classList.toggle('done', !isDone);
   const nameEl = checkEl.closest('.task-item').querySelector('.task-name');
   if (nameEl) nameEl.classList.toggle('done', !isDone);
   task.status = newStatus;
   try {
-    await notion(`/pages/${id}`, 'PATCH', {
-      properties: { Status: { select: { name: newStatus } } }
-    });
+    const statusVal = isPersonal && s.statusType === 'status'
+      ? { [s.status]: { status: { name: newStatus } } }
+      : { [isPersonal ? s.status : 'Status']: { select: { name: newStatus } } };
+    await notion(`/pages/${id}`, 'PATCH', { properties: statusVal });
     if (!isDone) {
       setTimeout(async () => {
         allTasks = allTasks.filter(t => t.id !== id);
@@ -1150,7 +1231,7 @@ async function toggleDone(id, checkEl) {
       }, 600);
     }
   } catch(e) {
-    task.status = isDone ? 'Done' : 'To do';
+    task.status = isDone ? doneVal : todoVal;
     checkEl.classList.toggle('done', isDone);
     if (nameEl) nameEl.classList.toggle('done', isDone);
     notify('Error: ' + e.message, 'error');
