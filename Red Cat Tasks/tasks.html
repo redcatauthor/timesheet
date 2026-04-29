@@ -1011,6 +1011,7 @@ async function loadTasks() {
     };
     if (dueProp) query.sorts = [{ property: dueProp, direction: 'ascending' }];
 
+    console.log('[loadTasks] query=', JSON.stringify(query));
     const res = await notion(`/databases/${dbId}/query`, 'POST', query);
 
     // Resolve project relation names (Red Cat only)
@@ -1062,6 +1063,7 @@ async function loadTasks() {
     setSyncing(false);
     renderTasks();
   } catch(e) {
+    console.error('[loadTasks] caught error:', e.message, e);
     setSyncing(false, true);
     if (isPersonal && (e.message.includes('404') || e.message.includes('not found') || e.message.toLowerCase().includes('unauthorized'))) {
       notify('Personal Tasks: connect your Notion integration to that database first', 'error');
