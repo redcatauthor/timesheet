@@ -1,0 +1,1187 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tasks — Red Cat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,300;9..144,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #1a1814;
+  --ink2: #3d3a35;
+  --ink3: #7a756d;
+  --ink4: #b0ab9f;
+  --paper: #ffffff;
+  --paper2: #f5f5f5;
+  --paper3: #e5e5e5;
+  --accent: #c0392b;
+  --accent2: #e74c3c;
+  --green: #3a7d5c;
+  --green-bg:#e8f4ee;
+  --radius: 6px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'DM Mono', monospace;
+  background: var(--paper2);
+  color: var(--ink);
+  min-height: 100vh;
+  font-size: 13px;
+}
+
+/* ── Header ── */
+header {
+  background: var(--ink);
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.logo {
+  font-family: 'Fraunces', serif;
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--paper);
+  letter-spacing: -0.3px;
+}
+.logo span { color: var(--accent2); }
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sync-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #4caf7d;
+  display: inline-block;
+}
+.sync-dot.loading { background: #8a6020; animation: pulse 1s infinite; }
+.sync-dot.error { background: var(--accent); }
+.sync-label {
+  font-size: 11px;
+  color: rgba(245,242,237,0.45);
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+/* ── Setup screen ── */
+#setup-screen {
+  min-height: calc(100vh - 52px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+.setup-card {
+  background: var(--paper);
+  border-radius: 10px;
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 440px;
+  border: 1px solid var(--paper3);
+}
+.setup-title {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-weight: 300;
+  margin-bottom: 0.4rem;
+  letter-spacing: -0.3px;
+}
+.setup-title span { color: var(--accent); }
+.setup-sub {
+  font-size: 12px;
+  color: var(--ink3);
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+.setup-label {
+  font-size: 11px;
+  color: var(--ink3);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 6px;
+  display: block;
+}
+.setup-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--paper3);
+  border-radius: var(--radius);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  background: var(--paper2);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s;
+  margin-bottom: 1.25rem;
+}
+.setup-input:focus { border-color: var(--accent); }
+.setup-btn {
+  width: 100%;
+  padding: 11px;
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  border-radius: var(--radius);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.setup-btn:hover { background: var(--ink2); }
+.setup-error {
+  font-size: 12px;
+  color: var(--accent);
+  margin-top: 10px;
+  display: none;
+}
+.setup-hint {
+  font-size: 11px;
+  color: var(--ink4);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+/* ── Main app ── */
+#app-screen { display: none; }
+.app-body {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* ── Current project bar ── */
+.project-bar {
+  background: var(--paper);
+  border-radius: 10px;
+  border: 1px solid var(--paper3);
+  padding: 0.875rem 1.25rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.project-bar-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--ink3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.project-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+  align-items: center;
+}
+.project-pill {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1.5px solid var(--paper3);
+  background: var(--paper2);
+  color: var(--ink3);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.project-pill:hover {
+  border-color: var(--ink3);
+  color: var(--ink2);
+}
+.project-pill.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.project-pill.none-pill {
+  color: var(--ink4);
+  border-style: dashed;
+}
+.project-pill.none-pill.active {
+  background: var(--paper2);
+  color: var(--ink3);
+  border-color: var(--ink3);
+  border-style: solid;
+}
+.project-bar-loading {
+  font-size: 11px;
+  color: var(--ink4);
+}
+
+/* ── Quick-add card ── */
+.add-card {
+  background: var(--paper);
+  border-radius: 10px;
+  border: 1px solid var(--paper3);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+.add-card-header {
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--paper3);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.add-card-title {
+  font-family: 'Fraunces', serif;
+  font-size: 17px;
+  font-weight: 300;
+  letter-spacing: -0.2px;
+}
+.add-card-sub {
+  font-size: 11px;
+  color: var(--ink4);
+}
+.add-card-body { padding: 1.25rem; }
+.field-group {
+  margin-bottom: 1rem;
+}
+.field-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--ink3);
+  margin-bottom: 5px;
+  display: block;
+}
+
+/* Task title — big and prominent */
+.task-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--paper3);
+  border-radius: var(--radius);
+  font-family: 'DM Mono', monospace;
+  font-size: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.task-input:focus { border-color: var(--accent); }
+.task-input::placeholder { color: var(--ink4); }
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 1rem;
+}
+.field-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 1rem;
+}
+select.field-input, input.field-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid var(--paper3);
+  border-radius: var(--radius);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23b0ab9f'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+select.field-input:focus, input.field-input:focus { border-color: var(--accent); }
+input.field-input { background-image: none; padding-right: 10px; }
+
+/* Project override select — highlighted when overriding */
+select.field-input.project-override-active {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.add-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+.btn-add {
+  padding: 9px 22px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  letter-spacing: 0.2px;
+}
+.btn-add:hover { background: var(--accent2); }
+.btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-clear {
+  padding: 9px 16px;
+  background: transparent;
+  color: var(--ink3);
+  border: 1px solid var(--paper3);
+  border-radius: var(--radius);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-clear:hover { background: var(--paper2); color: var(--ink2); }
+.add-feedback {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--green);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.add-feedback.visible { opacity: 1; }
+.add-feedback.error { color: var(--accent); }
+
+/* ── Recent tasks list ── */
+.recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.recent-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--ink3);
+}
+.recent-count {
+  font-size: 11px;
+  color: var(--ink4);
+}
+.task-list {
+  background: var(--paper);
+  border-radius: 10px;
+  border: 1px solid var(--paper3);
+  overflow: hidden;
+}
+.task-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--paper3);
+  gap: 10px;
+  transition: background 0.1s;
+}
+.task-item:last-child { border-bottom: none; }
+.task-item:hover { background: var(--paper2); }
+.task-check {
+  width: 16px; height: 16px;
+  border: 1.5px solid var(--paper3);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  background: var(--paper);
+}
+.task-check:hover { border-color: var(--accent); }
+.task-check.done {
+  background: var(--green);
+  border-color: var(--green);
+}
+.task-check.done::after {
+  content: '';
+  width: 8px; height: 5px;
+  border-left: 1.5px solid white;
+  border-bottom: 1.5px solid white;
+  transform: rotate(-45deg) translate(1px, -1px);
+  display: block;
+}
+.task-info { flex: 1; min-width: 0; }
+.task-name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+  transition: color 0.15s;
+}
+.task-name.done { color: var(--ink4); text-decoration: line-through; }
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.task-project { font-size: 11px; color: var(--ink3); }
+.tag {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+.tag-priority-urgent { background: #faeaea; color: #a03030; }
+.tag-priority-high { background: #fef3e2; color: #7a4f10; }
+.tag-priority-medium { background: #fdf8e6; color: #6b5500; }
+.tag-priority-low { background: var(--green-bg); color: var(--green); }
+.task-due {
+  font-size: 11px;
+  color: var(--ink4);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.task-due.overdue { color: var(--accent); }
+.task-list-empty {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--ink4);
+}
+.task-list-empty .big {
+  font-family: 'Fraunces', serif;
+  font-size: 40px;
+  font-weight: 300;
+  color: var(--paper3);
+  margin-bottom: 0.75rem;
+}
+
+/* ── Notification ── */
+#notif {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.notif-item {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  padding: 9px 16px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--paper);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+.notif-item.show { opacity: 1; transform: translateY(0); }
+.notif-item.success { border-left: 3px solid #4caf7d; }
+.notif-item.error { border-left: 3px solid var(--accent); }
+
+/* ── Tabs ── */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 1rem;
+}
+.tab-btn {
+  padding: 6px 18px;
+  border-radius: var(--radius);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1.5px solid var(--paper3);
+  background: var(--paper);
+  color: var(--ink3);
+  transition: all 0.15s;
+}
+.tab-btn:hover { border-color: var(--ink3); color: var(--ink2); }
+.tab-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* ── Settings link ── */
+.header-btn {
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid rgba(245,242,237,0.15);
+  background: transparent;
+  color: rgba(245,242,237,0.6);
+  transition: all 0.15s;
+}
+.header-btn:hover { background: rgba(245,242,237,0.08); color: var(--paper); }
+
+/* ── Settings modal ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(26,24,20,0.5);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--paper);
+  border-radius: 10px;
+  padding: 1.75rem;
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid var(--paper3);
+}
+.modal-title {
+  font-family: 'Fraunces', serif;
+  font-size: 18px;
+  font-weight: 300;
+  margin-bottom: 1.25rem;
+  letter-spacing: -0.2px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 1.5rem;
+}
+.modal-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--paper3);
+  background: var(--paper2);
+  color: var(--ink2);
+  transition: all 0.15s;
+}
+.modal-btn:hover { background: var(--paper3); }
+.modal-btn.primary {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.modal-btn.primary:hover { background: var(--ink2); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">task<span>s</span></div>
+  <div class="header-right">
+    <span class="sync-dot" id="sync-dot"></span>
+    <span class="sync-label" id="sync-label">ready</span>
+    <button class="header-btn" onclick="openSettings()">Settings</button>
+  </div>
+</header>
+
+<!-- Setup screen -->
+<div id="setup-screen" style="display:none;">
+  <div class="setup-card">
+    <div class="setup-title">task<span>s</span></div>
+    <p class="setup-sub">Quick-add to your Red Cat Tasks database. Uses the same Notion credentials as your timesheet.</p>
+    <label class="setup-label">Notion API key</label>
+    <input type="password" class="setup-input" id="setup-key" placeholder="secret_xxxxxxxxxxxxxxxxxxxx">
+    <p class="setup-hint">Same key as your timesheet. Find it at notion.so/my-integrations.</p>
+    <button class="setup-btn" onclick="setupConnect()">Connect</button>
+    <p class="setup-error" id="setup-error"></p>
+  </div>
+</div>
+
+<!-- Main app -->
+<div id="app-screen">
+  <div class="app-body">
+
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-redcat" onclick="switchTab('redcat')">Red Cat</button>
+      <button class="tab-btn" id="tab-personal" onclick="switchTab('personal')">Personal</button>
+    </div>
+
+    <!-- Current project bar -->
+    <div class="project-bar" id="project-bar">
+      <span class="project-bar-label">Project</span>
+      <div class="project-pills" id="project-pills">
+        <span class="project-bar-loading">Loading projects…</span>
+      </div>
+    </div>
+
+    <!-- Add card -->
+    <div class="add-card">
+      <div class="add-card-header">
+        <span class="add-card-title">New task</span>
+        <span class="add-card-sub" id="add-card-sub">adds to Red Cat Tasks</span>
+      </div>
+      <div class="add-card-body">
+        <div class="field-group">
+          <label class="field-label">Task</label>
+          <input type="text" class="task-input" id="t-name" placeholder="What needs doing?" autocomplete="off"
+            onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); addTask(); }">
+        </div>
+
+        <!-- Project override row -->
+        <div class="field-group" id="project-override-group">
+          <label class="field-label">Project <span style="color:var(--ink4);font-size:9px;text-transform:none;letter-spacing:0;">— overrides current project</span></label>
+          <select class="field-input" id="t-project" onchange="onProjectOverrideChange()">
+            <option value="__current__">Use current project</option>
+            <!-- populated dynamically -->
+          </select>
+        </div>
+
+        <div class="field-row">
+          <div>
+            <label class="field-label">Priority</label>
+            <select class="field-input" id="t-priority">
+              <option value="">No priority</option>
+              <option value="Urgent">Urgent</option>
+              <option value="High">High</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Label</label>
+            <select class="field-input" id="t-label">
+              <option value="">No label</option>
+              <option>Red Cat Accounts</option>
+              <option>AI Learning</option>
+              <option>Red Cat Job Seeking</option>
+              <option>Red Cat Website</option>
+              <option>Red Cat Admin</option>
+              <option>Red Cat Tools</option>
+              <option>Red Cat Blog</option>
+              <option>Red Cat Research</option>
+              <option>Simplify VMS Admin</option>
+              <option>Simplify VMS Docs</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div>
+            <label class="field-label">Task type</label>
+            <select class="field-input" id="t-type">
+              <option>Development</option>
+              <option>Design</option>
+              <option>Meetings</option>
+              <option>Research</option>
+              <option>Admin</option>
+              <option>Review</option>
+              <option>Testing</option>
+              <option>Writing</option>
+              <option>Reading</option>
+              <option>Docs</option>
+              <option>Learning</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Due date</label>
+            <input type="date" class="field-input" id="t-due">
+          </div>
+        </div>
+        <div class="add-actions">
+          <button class="btn-add" id="add-btn" onclick="addTask()">Add task</button>
+          <button class="btn-clear" onclick="clearForm()">Clear</button>
+          <span class="add-feedback" id="add-feedback"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active tasks list -->
+    <div class="recent-header">
+      <span class="recent-title">Active tasks</span>
+      <span class="recent-count" id="task-count"></span>
+    </div>
+
+    <div id="task-list" class="task-list">
+      <div class="task-list-empty">
+        <div class="big">—</div>
+        <p>Loading tasks...</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <div class="modal-title">Settings</div>
+    <div style="margin-bottom:12px;">
+      <label class="field-label">Notion API key</label>
+      <input type="password" class="field-input" id="set-key" style="width:100%">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn" onclick="closeSettings()">Cancel</button>
+      <button class="modal-btn primary" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="notif"></div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const PROXY        = 'https://old-voice-0a5c.redcatauthor.workers.dev/v1';
+const TASKS_DB     = '1de09150-aa46-4e46-a0f9-fd10ce5120da';
+const PERSONAL_DB  = '28996456eed980118d65ddeb2929a8d3';
+const PROJECTS_DB  = '29096456eed98151a64bcb3b400932a8';
+
+let API_KEY = '';
+let allTasks = [];
+let allProjects = [];      // [{ id, name }]
+let currentProjectId = ''; // '' = no project
+let currentTab = 'redcat';
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-redcat').classList.toggle('active', tab === 'redcat');
+  document.getElementById('tab-personal').classList.toggle('active', tab === 'personal');
+  document.getElementById('project-bar').style.display = tab === 'redcat' ? '' : 'none';
+  document.getElementById('project-override-group').style.display = tab === 'redcat' ? '' : 'none';
+  updateAddCardSub();
+  loadTasks();
+}
+
+function getKey() {
+  API_KEY = localStorage.getItem('ts_api_key') || localStorage.getItem('tasks_api_key') || '';
+}
+function saveKey(key) {
+  localStorage.setItem('tasks_api_key', key);
+  localStorage.setItem('ts_api_key', key);
+  API_KEY = key;
+}
+
+// ── Notion API ────────────────────────────────────────────────────────────────
+async function notion(path, method = 'GET', body = null) {
+  const opts = {
+    method,
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Notion-Version': '2022-06-28',
+      'Content-Type': 'application/json',
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${PROXY}${path}`, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Notion API error');
+  return data;
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+async function setupConnect() {
+  const key = document.getElementById('setup-key').value.trim();
+  const err = document.getElementById('setup-error');
+  err.style.display = 'none';
+  if (!key) { err.textContent = 'Please enter your API key.'; err.style.display = 'block'; return; }
+  API_KEY = key;
+  try {
+    await notion(`/databases/${TASKS_DB.replace(/-/g,'')}`);
+    saveKey(key);
+    showApp();
+  } catch(e) {
+    err.textContent = `Could not connect: ${e.message}`;
+    err.style.display = 'block';
+    API_KEY = '';
+  }
+}
+
+function openSettings() {
+  document.getElementById('set-key').value = API_KEY;
+  document.getElementById('settings-modal').classList.add('open');
+}
+function closeSettings() {
+  document.getElementById('settings-modal').classList.remove('open');
+}
+async function saveSettings() {
+  const key = document.getElementById('set-key').value.trim();
+  if (!key) return;
+  saveKey(key);
+  closeSettings();
+  notify('Settings saved', 'success');
+  await Promise.all([loadProjects(), loadTasks()]);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+getKey();
+if (API_KEY) {
+  showApp();
+} else {
+  document.getElementById('setup-screen').style.display = 'flex';
+}
+
+function showApp() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  // Restore last-used project
+  currentProjectId = localStorage.getItem('current_project_id') || '';
+  // Load projects first, then tasks in parallel
+  Promise.all([loadProjects(), loadTasks()]);
+  setTimeout(() => document.getElementById('t-name').focus(), 100);
+}
+
+// ── Load projects ─────────────────────────────────────────────────────────────
+async function loadProjects() {
+  try {
+    const res = await notion(`/databases/${PROJECTS_DB.replace(/-/g,'')}/query`, 'POST', {
+      page_size: 50,
+      sorts: [{ property: 'Project Name', direction: 'ascending' }],
+      filter: {
+        or: [
+          { property: 'Status', status: { equals: 'Not Started' } },
+          { property: 'Status', status: { equals: 'In Progress' } },
+        ]
+      }
+    });
+
+    allProjects = res.results.map(p => {
+      const props = p.properties || {};
+      const titleProp = Object.values(props).find(pr => pr.type === 'title');
+      const name = props['Project Name']?.title?.[0]?.plain_text
+        || titleProp?.title?.[0]?.plain_text
+        || 'Unnamed project';
+      return { id: p.id, name };
+    }).filter(p => p.name !== 'Unnamed project');
+
+    // If saved project no longer exists, clear it
+    if (currentProjectId && !allProjects.find(p => p.id === currentProjectId)) {
+      currentProjectId = '';
+      localStorage.removeItem('current_project_id');
+    }
+
+    renderProjectBar();
+    populateProjectOverride();
+    updateAddCardSub();
+  } catch(e) {
+    document.getElementById('project-pills').innerHTML =
+      `<span class="project-bar-loading" style="color:var(--accent)">Could not load projects: ${esc(e.message)}</span>`;
+  }
+}
+
+function renderProjectBar() {
+  const container = document.getElementById('project-pills');
+  const pills = allProjects.map(p => {
+    const active = p.id === currentProjectId;
+    return `<button class="project-pill${active ? ' active' : ''}" onclick="setCurrentProject('${p.id}')">${esc(p.name)}</button>`;
+  });
+  // None option
+  const noneActive = !currentProjectId;
+  pills.unshift(`<button class="project-pill none-pill${noneActive ? ' active' : ''}" onclick="setCurrentProject('')">None</button>`);
+  container.innerHTML = pills.join('');
+}
+
+function setCurrentProject(id) {
+  currentProjectId = id;
+  if (id) {
+    localStorage.setItem('current_project_id', id);
+  } else {
+    localStorage.removeItem('current_project_id');
+  }
+  renderProjectBar();
+  // Reset override dropdown to "use current"
+  const override = document.getElementById('t-project');
+  if (override) {
+    override.value = '__current__';
+    override.classList.remove('project-override-active');
+  }
+  updateAddCardSub();
+  renderTasks();
+}
+
+function populateProjectOverride() {
+  const sel = document.getElementById('t-project');
+  // Clear everything except the first "Use current project" option
+  while (sel.options.length > 1) sel.remove(1);
+  // No project option
+  const noneOpt = document.createElement('option');
+  noneOpt.value = '__none__';
+  noneOpt.textContent = '— No project';
+  sel.appendChild(noneOpt);
+  // Project options
+  allProjects.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.name;
+    sel.appendChild(o);
+  });
+}
+
+function onProjectOverrideChange() {
+  const sel = document.getElementById('t-project');
+  sel.classList.toggle('project-override-active', sel.value !== '__current__');
+}
+
+function updateAddCardSub() {
+  const sub = document.getElementById('add-card-sub');
+  if (!sub) return;
+  if (currentTab === 'personal') {
+    sub.textContent = 'adds to Personal Tasks';
+    return;
+  }
+  if (currentProjectId) {
+    const proj = allProjects.find(p => p.id === currentProjectId);
+    sub.textContent = proj ? `→ ${proj.name}` : 'adds to Red Cat Tasks';
+  } else {
+    sub.textContent = 'adds to Red Cat Tasks';
+  }
+}
+
+// Resolve which project ID to use when adding a task
+function resolveProjectId() {
+  const override = document.getElementById('t-project').value;
+  if (override === '__current__') return currentProjectId || null;
+  if (override === '__none__') return null;
+  return override || null;
+}
+
+// ── Load tasks ────────────────────────────────────────────────────────────────
+async function loadTasks() {
+  const dbId = (currentTab === 'personal' ? PERSONAL_DB : TASKS_DB).replace(/-/g,'');
+  setSyncing(true);
+  try {
+    const res = await notion(`/databases/${dbId}/query`, 'POST', {
+      page_size: 100,
+      sorts: [{ property: 'Due Date', direction: 'ascending' }],
+      filter: {
+        property: 'Status',
+        select: { does_not_equal: 'Done' }
+      }
+    });
+
+    // Resolve project relation names for display
+    const relIds = [...new Set(
+      res.results.flatMap(p => (p.properties?.Project?.relation || []).map(r => r.id))
+    )];
+    const projNames = {};
+    await Promise.all(relIds.map(async id => {
+      // Try cache from allProjects first
+      const cached = allProjects.find(p => p.id === id);
+      if (cached) { projNames[id] = cached.name; return; }
+      try {
+        const page = await notion(`/pages/${id}`);
+        const props = page.properties || {};
+        const titleProp = Object.values(props).find(p => p.type === 'title');
+        projNames[id] = props['Project Name']?.title?.[0]?.plain_text
+          || titleProp?.title?.[0]?.plain_text || '';
+      } catch(e) {}
+    }));
+
+    allTasks = res.results.map(p => {
+      const pr = p.properties;
+      const ids = (pr.Project?.relation || []).map(r => r.id);
+      return {
+        id: p.id,
+        title: pr.Task?.title?.[0]?.plain_text || 'Untitled',
+        status: pr.Status?.select?.name || pr.Status?.status?.name || '',
+        priority: pr.Priority?.select?.name || '',
+        label: pr.Label?.select?.name || '',
+        tasktype: pr['Task Type']?.select?.name || '',
+        due: pr['Due Date']?.date?.start || '',
+        project: ids.map(id => projNames[id] || '').filter(Boolean).join(', '),
+      };
+    });
+
+    setSyncing(false);
+    renderTasks();
+  } catch(e) {
+    setSyncing(false, true);
+    notify('Failed to load: ' + e.message, 'error');
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+const PRIORITY_TAG = {
+  Urgent: 'tag-priority-urgent',
+  High:   'tag-priority-high',
+  Medium: 'tag-priority-medium',
+  Low:    'tag-priority-low',
+};
+
+function renderTasks() {
+  const el = document.getElementById('task-list');
+
+  // Filter by current project pill selection (matched by name)
+  const currentProject = allProjects.find(p => p.id === currentProjectId);
+  const filtered = currentProjectId && currentProject
+    ? allTasks.filter(t => t.project === currentProject.name)
+    : allTasks;
+
+  document.getElementById('task-count').textContent = filtered.length + ' task' + (filtered.length !== 1 ? 's' : '');
+
+  if (!filtered.length) {
+    el.innerHTML = `<div class="task-list-empty"><div class="big">✓</div><p>${currentProjectId ? 'No tasks for this project' : 'No active tasks'}</p></div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(t => {
+    const isDone = t.status === 'Done';
+    const dueStr = t.due ? fmtDue(t.due) : '';
+    const overdue = t.due && new Date(t.due) < new Date() && !isDone;
+    const prioTag = t.priority ? `<span class="tag ${PRIORITY_TAG[t.priority] || ''}">${t.priority}</span>` : '';
+    const projSpan = t.project ? `<span class="task-project">${esc(t.project)}</span>` : '';
+    return `
+      <div class="task-item" data-id="${t.id}">
+        <div class="task-check${isDone ? ' done' : ''}" onclick="toggleDone('${t.id}', this)"></div>
+        <div class="task-info">
+          <div class="task-name${isDone ? ' done' : ''}">${esc(t.title)}</div>
+          <div class="task-meta">
+            ${projSpan}
+            ${prioTag}
+            ${t.tasktype ? `<span class="tag" style="background:var(--paper2);color:var(--ink3);">${t.tasktype}</span>` : ''}
+          </div>
+        </div>
+        ${dueStr ? `<span class="task-due${overdue ? ' overdue' : ''}">${dueStr}</span>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function fmtDue(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const now = new Date();
+  const diff = Math.round((d - now) / 86400000);
+  if (diff === 0) return 'today';
+  if (diff === 1) return 'tomorrow';
+  if (diff === -1) return 'yesterday';
+  if (diff < -1) return `${Math.abs(diff)}d overdue`;
+  if (diff < 7) return `in ${diff}d`;
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+// ── Add task ──────────────────────────────────────────────────────────────────
+async function addTask() {
+  const name = document.getElementById('t-name').value.trim();
+  if (!name) { document.getElementById('t-name').focus(); return; }
+
+  const priority = document.getElementById('t-priority').value;
+  const label    = document.getElementById('t-label').value;
+  const tasktype = document.getElementById('t-type').value;
+  const due      = document.getElementById('t-due').value;
+  const projectId = resolveProjectId();
+
+  const btn = document.getElementById('add-btn');
+  btn.disabled = true;
+  btn.textContent = 'Adding...';
+
+  const dbId = (currentTab === 'personal' ? PERSONAL_DB : TASKS_DB).replace(/-/g,'');
+  const props = {
+    Task:   { title: [{ text: { content: name } }] },
+    Status: { select: { name: 'To do' } },
+    ...(priority   ? { Priority:    { select: { name: priority } } }   : {}),
+    ...(label      ? { Label:       { select: { name: label } } }      : {}),
+    ...(tasktype   ? { 'Task Type': { select: { name: tasktype } } }   : {}),
+    ...(due        ? { 'Due Date':  { date: { start: due } } }         : {}),
+    ...(projectId && currentTab === 'redcat' ? { Project: { relation: [{ id: projectId }] } } : {}),
+  };
+
+  try {
+    await notion('/pages', 'POST', {
+      parent: { database_id: dbId },
+      properties: props,
+    });
+    showFeedback('Task added', false);
+    clearForm();
+    const projName = projectId ? (allProjects.find(p => p.id === projectId)?.name || '') : '';
+    notify('Added' + (projName ? ` → ${projName}` : ''), 'success');
+    await loadTasks();
+  } catch(e) {
+    showFeedback('Failed: ' + e.message, true);
+    notify('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Add task';
+  }
+}
+
+function clearForm() {
+  document.getElementById('t-name').value = '';
+  document.getElementById('t-due').value = '';
+  document.getElementById('t-priority').value = 'Medium';
+  document.getElementById('t-label').value = '';
+  document.getElementById('t-type').value = 'Development';
+  // Reset project override to "use current"
+  const override = document.getElementById('t-project');
+  override.value = '__current__';
+  override.classList.remove('project-override-active');
+  document.getElementById('t-name').focus();
+}
+
+function showFeedback(msg, isError) {
+  const el = document.getElementById('add-feedback');
+  el.textContent = msg;
+  el.className = 'add-feedback visible' + (isError ? ' error' : '');
+  setTimeout(() => { el.className = 'add-feedback'; }, 2800);
+}
+
+// ── Toggle done ───────────────────────────────────────────────────────────────
+async function toggleDone(id, checkEl) {
+  const task = allTasks.find(t => t.id === id);
+  if (!task) return;
+  const isDone = task.status === 'Done';
+  const newStatus = isDone ? 'To do' : 'Done';
+  checkEl.classList.toggle('done', !isDone);
+  const nameEl = checkEl.closest('.task-item').querySelector('.task-name');
+  if (nameEl) nameEl.classList.toggle('done', !isDone);
+  task.status = newStatus;
+  try {
+    await notion(`/pages/${id}`, 'PATCH', {
+      properties: { Status: { select: { name: newStatus } } }
+    });
+    if (!isDone) {
+      setTimeout(async () => {
+        allTasks = allTasks.filter(t => t.id !== id);
+        renderTasks();
+        notify('Marked done', 'success');
+      }, 600);
+    }
+  } catch(e) {
+    task.status = isDone ? 'Done' : 'To do';
+    checkEl.classList.toggle('done', isDone);
+    if (nameEl) nameEl.classList.toggle('done', isDone);
+    notify('Error: ' + e.message, 'error');
+  }
+}
+
+// ── Sync indicator ────────────────────────────────────────────────────────────
+function setSyncing(loading, error = false) {
+  const dot   = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  dot.className = 'sync-dot' + (loading ? ' loading' : error ? ' error' : '');
+  label.textContent = loading ? 'syncing' : error ? 'error' : 'synced';
+}
+
+// ── Notify ────────────────────────────────────────────────────────────────────
+function notify(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `notif-item ${type}`;
+  el.textContent = msg;
+  document.getElementById('notif').appendChild(el);
+  requestAnimationFrame(() => { requestAnimationFrame(() => el.classList.add('show')); });
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, 2500);
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
