@@ -837,6 +837,11 @@
 
   <div class="stats-bar">
     <div class="stat">
+      <div class="stat-label">Today</div>
+      <div class="stat-val" id="s-day">0h</div>
+      <div class="stat-sub" id="s-day-sub">0 entries</div>
+    </div>
+    <div class="stat">
       <div class="stat-label">This week</div>
       <div class="stat-val" id="s-week">0h</div>
       <div class="stat-sub" id="s-week-sub">0 entries</div>
@@ -1338,12 +1343,16 @@ function renderTable() {
 }
 
 function updateStats() {
-  const ws = weekStart(), ms = monthStart();
+  const td = today(), ws = weekStart(), ms = monthStart();
+  const dE = entries.filter(e => e.date === td);
   const wE = entries.filter(e => e.date >= ws);
   const mE = entries.filter(e => e.date >= ms);
+  const dH = dE.reduce((a,e) => a+e.hours, 0);
   const wH = wE.reduce((a,e) => a+e.hours, 0);
   const mH = mE.reduce((a,e) => a+e.hours, 0);
   const tH = entries.reduce((a,e) => a+e.hours, 0);
+  document.getElementById('s-day').textContent = fmtHours(dH);
+  document.getElementById('s-day-sub').textContent = `${dE.length} entr${dE.length===1?'y':'ies'}`;
   document.getElementById('s-week').textContent = fmtHours(wH);
   document.getElementById('s-week-sub').textContent = `${wE.length} entr${wE.length===1?'y':'ies'}`;
   document.getElementById('s-month').textContent = fmtHours(mH);
@@ -1431,16 +1440,19 @@ function recalcTimes() {
     return String(h).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
   };
 
-  if (startVal && !isNaN(hoursVal) && hoursVal > 0 && !endVal) {
+  if (startVal && endVal && !hoursEl.value) {
+    // start + end → hours (only when hours is empty)
+    let mins = toMins(endVal) - toMins(startVal);
+    if (mins < 0) mins += 1440; // past midnight
+    hoursEl.value = Math.round(mins / 15) * 0.25; // round to nearest 0.25h
+  } else if (startVal && !isNaN(hoursVal) && hoursVal > 0 && !endVal) {
     // start + hours → end
     endEl.value = toTimeStr(toMins(startVal) + Math.round(hoursVal * 60));
   } else if (endVal && !isNaN(hoursVal) && hoursVal > 0 && !startVal) {
     // end + hours → start
     const startMins = toMins(endVal) - Math.round(hoursVal * 60);
-    startEl.value = toTimeStr((startMins + 1440) % 1440); // wrap negative past midnight
+    startEl.value = toTimeStr((startMins + 1440) % 1440);
   }
-  // Note: start + end does NOT auto-fill hours. Enter hours explicitly to
-  // ensure breaks are reflected correctly in the weekly report totals.
 }
 
 // ── Add / Edit / Delete ───────────────────────────────────────────────────────
