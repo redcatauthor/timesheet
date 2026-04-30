@@ -785,7 +785,6 @@ async function fetchPersonalSchema() {
 }
 
 async function switchTab(tab) {
-  console.log('[tab] switching to', tab);
   currentTab = tab;
   document.getElementById('tab-redcat').classList.toggle('active', tab === 'redcat');
   document.getElementById('tab-personal').classList.toggle('active', tab === 'personal');
@@ -793,7 +792,6 @@ async function switchTab(tab) {
   document.getElementById('project-override-group').style.display = tab === 'redcat' ? '' : 'none';
   updateAddCardSub();
   if (tab === 'personal') await fetchPersonalSchema();
-  console.log('[tab] calling loadTasks, currentTab=', currentTab);
   loadTasks();
 }
 
@@ -993,7 +991,6 @@ function resolveProjectId() {
 async function loadTasks() {
   const isPersonal = currentTab === 'personal';
   const dbId = (isPersonal ? PERSONAL_DB : TASKS_DB).replace(/-/g,'');
-  console.log('[loadTasks] isPersonal=', isPersonal, 'dbId=', dbId);
   const s = isPersonal ? (personalSchema || await fetchPersonalSchema()) : null;
 
   allTasks = [];
@@ -1011,7 +1008,6 @@ async function loadTasks() {
     };
     if (dueProp) query.sorts = [{ property: dueProp, direction: 'ascending' }];
 
-    console.log('[loadTasks] query=', JSON.stringify(query));
     const res = await notion(`/databases/${dbId}/query`, 'POST', query);
 
     // Resolve project relation names (Red Cat only)
@@ -1063,7 +1059,6 @@ async function loadTasks() {
     setSyncing(false);
     renderTasks();
   } catch(e) {
-    console.error('[loadTasks] caught error:', e.message, e);
     setSyncing(false, true);
     if (isPersonal && (e.message.includes('404') || e.message.includes('not found') || e.message.toLowerCase().includes('unauthorized'))) {
       notify('Personal Tasks: connect your Notion integration to that database first', 'error');
@@ -1084,9 +1079,9 @@ const PRIORITY_TAG = {
 function renderTasks() {
   const el = document.getElementById('task-list');
 
-  // Filter by current project pill selection (matched by name)
+  // Filter by project — only applies on Red Cat tab
   const currentProject = allProjects.find(p => p.id === currentProjectId);
-  const filtered = currentProjectId && currentProject
+  const filtered = (currentTab === 'redcat' && currentProjectId && currentProject)
     ? allTasks.filter(t => t.project === currentProject.name)
     : allTasks;
 
