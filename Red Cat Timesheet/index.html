@@ -837,7 +837,7 @@
 
   <div class="stats-bar">
     <div class="stat">
-      <div class="stat-label">Today</div>
+      <div class="stat-label" id="s-day-label">Today</div>
       <div class="stat-val" id="s-day">0h</div>
       <div class="stat-sub" id="s-day-sub">0 entries</div>
     </div>
@@ -1307,6 +1307,7 @@ function renderTable() {
 
   if (!filtered.length) {
     empty.style.display = 'block';
+    updateStats();
     return;
   }
   empty.style.display = 'none';
@@ -1335,16 +1336,27 @@ function renderTable() {
       </td>`;
     tbody.appendChild(tr);
   });
+  updateStats();
 }
 
 function updateStats() {
   const td = today(), ws = weekStart(), ms = monthStart();
-  const dE = entries.filter(e => e.date === td);
+  const from = document.getElementById('f-from').value;
+  const to = document.getElementById('f-to').value;
+  const dDate = from || td;
+  const dE = entries.filter(e => {
+    if (from && e.date < from) return false;
+    if (to && e.date > to) return false;
+    if (!from && !to && e.date !== td) return false;
+    return true;
+  });
   const wE = entries.filter(e => e.date >= ws);
   const mE = entries.filter(e => e.date >= ms);
   const dH = dE.reduce((a,e) => a+e.hours, 0);
   const wH = wE.reduce((a,e) => a+e.hours, 0);
   const mH = mE.reduce((a,e) => a+e.hours, 0);
+  const dayLabel = (from && to && from !== to) ? 'Selected' : (from ? fmtDate(from) : 'Today');
+  document.getElementById('s-day-label').textContent = dayLabel;
   document.getElementById('s-day').textContent = fmtHours(dH);
   document.getElementById('s-day-sub').textContent = `${dE.length} entr${dE.length===1?'y':'ies'}`;
   document.getElementById('s-week').textContent = fmtHours(wH);
